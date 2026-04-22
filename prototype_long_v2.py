@@ -119,6 +119,11 @@ if SIMULATION_MODE:
 positions          = {}
 cooldown_tracker   = {}
 consecutive_losses = {}
+recent_sl_times    = []  # Cascade Pause 追蹤器
+
+# ADX 和 Score 趨勢追蹤
+_last_scout_adx    = 0.0   # 上次 scout 的 ADX
+_last_scout_score  = 0.0   # 上次 scout 的 Score
 
 # ==========================================
 # ⚙️ [系統/參數] 策略與風控全局變數
@@ -131,10 +136,14 @@ MAX_NOTIONAL_PER_TRADE = 200.0
 
 NET_FLOW_SIGMA = 1.2
 TP_ATR_MULT    = 5.0
-SL_ATR_MULT    = 2.0
+SL_ATR_MULT    = 3.0
 
 MAX_CONSECUTIVE_LOSSES = 3
 DYNAMIC_BAN_DURATION   = 86400
+
+MAX_CONCURRENT_POSITIONS = 3
+CASCADE_SL_WINDOW = 180    # 秒
+CASCADE_SL_TRIGGER = 2     # 筆
 
 SCOUTING_INTERVAL       = 125
 POSITION_CHECK_INTERVAL = 4
@@ -519,12 +528,13 @@ def load_dynamic_blacklist():
 
 
 def handle_trade_result(symbol, pnl):
-    global consecutive_losses, cooldown_tracker
+    global consecutive_losses, cooldown_tracker, recent_sl_times
     if pnl > 0:
         consecutive_losses[symbol] = 0
         if symbol in cooldown_tracker: del cooldown_tracker[symbol]
     elif pnl < 0:
         consecutive_losses[symbol] = consecutive_losses.get(symbol, 0) + 1
+        recent_sl_times.append(time.time())  # 記錄SL時間
         if consecutive_losses[symbol] >= MAX_CONSECUTIVE_LOSSES:
             cooldown_tracker[symbol] = time.time() + DYNAMIC_BAN_DURATION
         else:
@@ -1399,6 +1409,19 @@ def execute_live_long(symbol, net_flow, current_price, is_strong,
     if atr is None or atr == 0 or current_price == 0: return
     if not (is_strong and is_volatile and symbol not in positions): return
 
+    # ── 硬性倉位上限（最後防線）──
+    if len(positions) >= MAX_CONCURRENT_POSITIONS:
+        logger.debug(f"⛔ {symbol} 倉位上限 {MAX_CONCURRENT_POSITIONS}，拒絕入場")
+        return
+
+    # ── Cascade SL 保護（最後防線）──
+    now = time.time()
+    recent_sl_times[:] = [t for t in recent_sl_times 
+                        if now - t < CASCADE_SL_WINDOW]
+    if len(recent_sl_times) >= CASCADE_SL_TRIGGER:
+        logger.debug(f"⛔ {symbol} Cascade SL 保護中，拒絕入場")
+        return
+
     cancel_all_v5(symbol)
     actual_bal = get_live_usdt_balance()   # [FIX-SIM] Sim → sim_balance
     eff_bal    = min(WORKING_CAPITAL, actual_bal)
@@ -1582,31 +1605,57 @@ def main():
 
                 if is_long_signal:
                     mean_adx = regime.get('mean_adx', 0)
+                    curr_score = regime.get('market_score', 0)
+                    
+                    # ADX衰減檢測
+                    global _last_scout_adx, _last_scout_score
+                    adx_decay = _last_scout_adx - mean_adx if _last_scout_adx > 0 else 0
+                    
+                    # Score衰減檢測
+                    score_decay = _last_scout_score - curr_score if _last_scout_score > 0 else 0
                     
                     # 分級調整邏輯
                     if mean_adx < 20:
-                        print(f"⚠️ +2 觸發但 ADX={mean_adx:.1f} < 20，弱趨勢不交易")
+                        print(f"⚠️ ADX={mean_adx:.1f} < 20，弱趨勢不交易")
+                    elif score_decay > 0.05 and _last_scout_score > 0:
+                        # Score衰減超過0.05：跳過本輪入場
+                        print(f"⚠️ Score衰減 {score_decay:.3f}（{_last_scout_score:.3f}→{curr_score:.3f}），跳過本輪入場")
+                        _last_scout_adx = mean_adx
+                        _last_scout_score = curr_score
+                        continue  # 跳過後續掃描
+                    elif adx_decay > 2.0:
+                        # ADX衰減超過2點：強制減倉至50%
+                        position_multiplier = 0.5
+                        print(f"⚠️ ADX衰減 {adx_decay:.1f}點（{_last_scout_adx:.1f}→{mean_adx:.1f}），倉位降至50%")
                     elif mean_adx < 25:
                         # 中等趨勢：降低倉位至70%
                         position_multiplier = 0.7
                         print(f"🟡 趨勢多頭+2（ADX={mean_adx:.1f}）中等趨勢，倉位調整至{position_multiplier*100:.0f}%"
                               f"{'[SIM]' if SIMULATION_MODE else ''}掃描...")
-                        for s in target_coins:
-                            try:
-                                flow, last_p, is_strong = apply_lee_ready_long_logic(s)
-                                atr, is_v = get_market_metrics(s)
-                                if last_p > 0:
-                                    execute_live_long(s, flow, last_p, is_strong,
-                                                      atr, is_v, regime=regime,
-                                                      position_multiplier=position_multiplier)
-                            except Exception:
-                                continue
-                            time.sleep(0.3)
                     else:
                         # 強趨勢：正常倉位
                         position_multiplier = 1.0
                         print(f"🟢 趨勢多頭+2（ADX={mean_adx:.1f}）強趨勢，正常倉位"
                               f"{'[SIM]' if SIMULATION_MODE else ''}掃描...")
+                    
+                    _last_scout_adx = mean_adx    # 更新ADX記憶
+                    _last_scout_score = curr_score # 更新Score記憶
+                    
+                    # 只有在非弱趨勢情況下才進行後續檢查
+                    if mean_adx >= 20:
+                        # 倉位上限檢查
+                        if len(positions) >= MAX_CONCURRENT_POSITIONS:
+                            print(f"⛔ 倉位已達上限 {MAX_CONCURRENT_POSITIONS}，跳過本輪掃描")
+                            continue
+                        
+                        # Cascade Pause 檢查
+                        now = time.time()
+                        recent_sl_times[:] = [t for t in recent_sl_times 
+                                            if now - t < CASCADE_SL_WINDOW]
+                        if len(recent_sl_times) >= CASCADE_SL_TRIGGER:
+                            print(f"⛔ SL 連環觸發保護：{len(recent_sl_times)} 筆 SL 在 {CASCADE_SL_WINDOW}s 內，暫停入場")
+                            continue
+                        
                         for s in target_coins:
                             try:
                                 flow, last_p, is_strong = apply_lee_ready_long_logic(s)
