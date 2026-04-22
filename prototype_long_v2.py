@@ -1013,39 +1013,34 @@ def get_btc_regime_v3_fast():
         eth_p = regime_data.get('ETH/USDT:USDT', {}).get('closes', [0])[-1]
         sol_p = regime_data.get('SOL/USDT:USDT', {}).get('closes', [0])[-1]
         
-        # 使用 DataFrame 表格顯示
-        df_data = {
-            '指標': [
-                'BTC/ETH/SOL 現價',
-                '複合分數',
-                'Z-Score',
-                'ADX(20/25)',
-                'BBW',
-                'ATR%',
-                'EMA方向',
-                '高波動/熊市',
-                'bear_votes',
-                'bull_votes'
-            ],
-            '值': [
-                f"{btc_p:.0f} / {eth_p:.0f} / {sol_p:.1f}",
-                f"{score:.3f} (MR:≥{mr_thr:.2f} | TR:≤{tr_thr:.2f})",
-                f"{mean_z:+.3f}abs({abs(mean_z):.3f}) (多頭:<{zl_thr:.3f} | 空頭:>{zs_thr:.3f})",
-                f"{mean_adx:.1f} (≥20=趨勢 | ≥25=強趨勢)",
-                f"{mean_bbw:.4f} (≥{bb_thr:.4f}=趨勢確認)",
-                f"{mean_atr:.4f} (高波動閾值:{atr_hi:.4f})",
-                f"{'↑' if ema_dir==1 else '↓' if ema_dir==-1 else '→'}",
-                f"高波動:{'是' if is_highvol else '否'} | 熊市:{'開啟' if is_bear else '關閉'}",
-                f"{bear_votes}/{n_assets} (資產7天跌>4%)",
-                f"{bull_votes}/{n_assets} (資產7天升>3%)"
-            ]
-        }
-        df = pd.DataFrame(df_data)
-        print(df.to_string(index=False, max_colwidth=55))
-        
-        print(f"📡 信號                  : {signal_names.get(regime_signal,'無信號')}")
-        print(f"🚦 決策                  : {status_text}")
-        print("-" * 60)
+        # === 合併為一張表：左欄指標名，右欄對應值 ===
+        labels = [
+            'BTC/ETH/SOL Price', 'Composite Score', 'Z-Score', 'ADX(20/25)',
+            'BBW', 'ATR%', 'EMA Direction',
+            'HighVol/Bear', 'bear_votes', 'bull_votes', 'Signal', 'Decision'
+        ]
+        values = [
+            f"{btc_p:.0f} / {eth_p:.0f} / {sol_p:.1f}",
+            f"{score:.3f} (MR: >={mr_thr:.2f} | TR: <={tr_thr:.2f})",
+            f"{mean_z:+.3f} abs({abs(mean_z):.3f}) (long: <{zl_thr:.3f} | short: >{zs_thr:.3f})",
+            f"{mean_adx:.1f} (>=20 trend | >=25 strong)",
+            f"{mean_bbw:.4f} (>={bb_thr:.4f} trend)",
+            f"{mean_atr:.4f} (highvol_threshold: {atr_hi:.4f})",
+            f"{'↑' if ema_dir==1 else '↓' if ema_dir==-1 else '→'}",
+            f"highvol: {'Y' if is_highvol else 'N'} | bear: {'ON' if is_bear else 'OFF'}",
+            f"{bear_votes}/{n_assets}",
+            f"{bull_votes}/{n_assets}",
+            f"{signal_names.get(regime_signal,'No Signal')}",
+            status_text
+        ]
+        max_len = max(len(l) for l in labels)
+        pad = max(len(max(labels, key=len)) + 4, 18)
+        sep_len = pad + 45
+
+        print("-" * sep_len)
+        for lbl, val in zip(labels, values):
+            print(f"  {lbl:<{pad}}{val}")
+        print("-" * sep_len)
         
         # Telegram市場狀態通知（每小時或信號變化時）
         global _last_market_signal, _last_market_notification_time
