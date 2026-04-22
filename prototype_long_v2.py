@@ -12,9 +12,16 @@ from datetime import datetime
 try:
     from telegram_bot import telegram_notifier
     TELEGRAM_ENABLED = telegram_notifier.enabled
+    if TELEGRAM_ENABLED:
+        print("✅ Telegram Bot 已成功加載")
+    else:
+        print("⚠️ Telegram Bot 配置不完整，請檢查.env中的 TELEGRAM_BOT_TOKEN 和 TELEGRAM_CHAT_ID")
 except ImportError:
     TELEGRAM_ENABLED = False
-    logging.getLogger(__name__).warning("⚠️ Telegram Bot模塊未找到，通知功能將禁用")
+    print("⚠️ Telegram Bot模塊未找到，通知功能將禁用")
+except Exception as e:
+    TELEGRAM_ENABLED = False
+    print(f"⚠️ Telegram Bot 初始化失敗: {e}")
 
 # ==========================================
 # ⚙️ [系統/參數] 模組初始化與 API 配置 V6.7 BugFixed
@@ -1006,9 +1013,11 @@ def get_btc_regime_v3_fast():
         eth_p = regime_data.get('ETH/USDT:USDT', {}).get('closes', [0])[-1]
         sol_p = regime_data.get('SOL/USDT:USDT', {}).get('closes', [0])[-1]
         print(f"   BTC/ETH/SOL 現價      : {btc_p:.0f} / {eth_p:.0f} / {sol_p:.1f}")
-        print(f"   複合分數              : {score:.3f}  (MR閾值:{mr_thr:.2f} TR閾值:{tr_thr:.2f})")
-        print(f"   Z-Score(abs)         : {abs(mean_z):.3f}  (多:{zl_thr:.3f} 空:{zs_thr:.3f})")
-        print(f"   ADX(20/25)           : {mean_adx:.1f} | BBW:{mean_bbw:.4f} | ATR%:{mean_atr:.4f}")
+        print(f"   複合分數              : {score:.3f}  (MR閾值:<{mr_thr:.2f} | TR閾值:>{tr_thr:.2f})")
+        print(f"   Z-Score (當前:{mean_z:+.3f}) : {abs(mean_z):.3f}  (多頭閾值:<{zl_thr:.3f} | 空頭閾值:>{zs_thr:.3f})")
+        print(f"   ADX(20/25)           : {mean_adx:.1f} (≥20=趨勢 | ≥25=強趨勢)")
+        print(f"   BBW                  : {mean_bbw:.4f} (≥{bb_thr:.4f}=趨勢確認)")
+        print(f"   ATR%                 : {mean_atr:.4f} (高波動閾值:{atr_hi:.4f})")
         print(f"   EMA方向               : {'↑' if ema_dir==1 else '↓' if ema_dir==-1 else '→'}")
         print(f"   高波動                : {'是' if is_highvol else '否'} | "
               f"熊市閘門: {'開啟' if is_bear else '關閉'}")
@@ -1030,14 +1039,18 @@ def get_btc_regime_v3_fast():
              current_time - _last_market_notification_time > 3600)):
             
             try:
-                # 準備市場數據
+                # 準備市場數據（完整版）
                 market_data = {
                     'signal_names': signal_names.get(regime_signal, '無信號'),
                     'mean_adx': mean_adx,
                     'market_score': score,
                     'is_highvol': is_highvol,
                     'is_bear': is_bear,
-                    'btc_price': btc_p
+                    'btc_price': btc_p,
+                    'eth_price': eth_p,
+                    'sol_price': sol_p,
+                    'positions_count': len(positions),
+                    'total_pnl': sim_total_pnl if SIMULATION_MODE else 0
                 }
                 
                 telegram_notifier.send_market_status(market_data)

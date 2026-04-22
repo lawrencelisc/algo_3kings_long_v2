@@ -25,9 +25,14 @@ class TelegramNotifier:
         self.enabled = bool(self.bot_token and self.chat_id)
         
         if self.enabled:
-            logger.info("✅ Telegram Bot 已啟用")
+            logger.info(f"✅ Telegram Bot 已啟用 (Chat ID: {self.chat_id})")
         else:
-            logger.warning("⚠️ Telegram Bot 未啟用，請設置 TELEGRAM_BOT_TOKEN 和 TELEGRAM_CHAT_ID")
+            if not self.bot_token:
+                logger.warning("⚠️ Telegram Bot 未啟用：缺少 TELEGRAM_BOT_TOKEN")
+            elif not self.chat_id:
+                logger.warning("⚠️ Telegram Bot 未啟用：缺少 TELEGRAM_CHAT_ID")
+            else:
+                logger.warning("⚠️ Telegram Bot 未啟用，請檢查配置")
     
     def send_message(self, text, parse_mode='Markdown', disable_notification=False):
         """發送訊息到Telegram"""
@@ -99,16 +104,22 @@ class TelegramNotifier:
         
         lines = [
             "📊 *市場狀態更新*",
-            f"▪️ 時間: {timestamp}",
-            f"▪️ 信號: {regime_data.get('signal_names', '未知')}",
-            f"▪️ ADX: {regime_data.get('mean_adx', 0):.1f}",
-            f"▪️ 分數: {regime_data.get('market_score', 0):.3f}",
-            f"▪️ 高波動: {'是' if regime_data.get('is_highvol') else '否'}",
-            f"▪️ 熊市: {'開啟' if regime_data.get('is_bear') else '關閉'}"
+            f"🕒 時間: `{timestamp}`",
+            f"📡 信號: `{regime_data.get('signal_names', '無信號')}`",
+            "",
+            "💰 價格:",
+            f"   • BTC: `${regime_data.get('btc_price', 0):,.0f}`",
+            f"   • ETH: `${regime_data.get('eth_price', 0):,.0f}`",
+            f"   • SOL: `${regime_data.get('sol_price', 0):.1f}`",
+            "",
+            "📈 技術指標:",
+            f"   • ADX: `{regime_data.get('mean_adx', 0):.1f}`",
+            f"   • 複合分數: `{regime_data.get('market_score', 0):.3f}`",
+            f"   • 高波動: `{'是 ⚠️' if regime_data.get('is_highvol') else '否'}`",
+            f"   • 熊市: `{'開啟 🐻' if regime_data.get('is_bear') else '關閉'}`",
+            "",
+            f"🏷️ 持倉: {regime_data.get('positions_count', 0)}個 | PnL: `${regime_data.get('total_pnl', 0):+.2f}`"
         ]
-        
-        if 'btc_price' in regime_data:
-            lines.insert(2, f"▪️ BTC: ${regime_data['btc_price']:.0f}")
         
         message = "\n".join(lines)
         return self.send_message(message, disable_notification=True)

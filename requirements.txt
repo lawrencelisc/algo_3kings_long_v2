@@ -5,3 +5,4 @@ ccxt                    # Cryptocurrency exchange library
 pandas                  # Data manipulation
 numpy                   # Numerical computing
 python-dotenv           # Environment variable management
+logging
