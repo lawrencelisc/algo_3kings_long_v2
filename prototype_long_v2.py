@@ -1012,17 +1012,37 @@ def get_btc_regime_v3_fast():
         btc_p = regime_data.get('BTC/USDT:USDT', {}).get('closes', [0])[-1]
         eth_p = regime_data.get('ETH/USDT:USDT', {}).get('closes', [0])[-1]
         sol_p = regime_data.get('SOL/USDT:USDT', {}).get('closes', [0])[-1]
-        print(f"   BTC/ETH/SOL 現價      : {btc_p:.0f} / {eth_p:.0f} / {sol_p:.1f}")
-        print(f"   複合分數               : {score:.3f}   (TR:≤{tr_thr:.2f}) | MR:≥{mr_thr:.2f}")
-        print(f"   Z-Score(當前:{mean_z:+.3f}) : {abs(mean_z):.3f}   (多頭:<{zl_thr:.3f} | 空頭:>{zs_thr:.3f})")
-        print(f"   ADX(20/25)           : {mean_adx:.1f}     (≥20=趨勢 | ≥25=強趨勢)")
-        print(f"   BBW                  : {mean_bbw:.4f}     (≥{bb_thr:.4f}=趨勢確認)")
-        print(f"   ATR%                 : {mean_atr:.4f}     (高波動閾值:{atr_hi:.4f})")
-        print(f"   EMA方向               : {'↑' if ema_dir==1 else '↓' if ema_dir==-1 else '→'}")
-        print(f"   高波動                : {'是' if is_highvol else '否'} | "
-              f"熊市閘門: {'開啟' if is_bear else '關閉'}")
-        print(f"   bear_votes           : {bear_votes}/{n_assets} (資產7天跌>4%)")
-        print(f"   bull_votes           : {bull_votes}/{n_assets} (資產7天升>3%)")
+        
+        # 使用 DataFrame 表格顯示
+        df_data = {
+            '指標': [
+                'BTC/ETH/SOL 現價',
+                '複合分數',
+                'Z-Score',
+                'ADX(20/25)',
+                'BBW',
+                'ATR%',
+                'EMA方向',
+                '高波動/熊市',
+                'bear_votes',
+                'bull_votes'
+            ],
+            '值': [
+                f"{btc_p:.0f} / {eth_p:.0f} / {sol_p:.1f}",
+                f"{score:.3f} (MR:≥{mr_thr:.2f} | TR:≤{tr_thr:.2f})",
+                f"{mean_z:+.3f}abs({abs(mean_z):.3f}) (多頭:<{zl_thr:.3f} | 空頭:>{zs_thr:.3f})",
+                f"{mean_adx:.1f} (≥20=趨勢 | ≥25=強趨勢)",
+                f"{mean_bbw:.4f} (≥{bb_thr:.4f}=趨勢確認)",
+                f"{mean_atr:.4f} (高波動閾值:{atr_hi:.4f})",
+                f"{'↑' if ema_dir==1 else '↓' if ema_dir==-1 else '→'}",
+                f"高波動:{'是' if is_highvol else '否'} | 熊市:{'開啟' if is_bear else '關閉'}",
+                f"{bear_votes}/{n_assets} (資產7天跌>4%)",
+                f"{bull_votes}/{n_assets} (資產7天升>3%)"
+            ]
+        }
+        df = pd.DataFrame(df_data)
+        print(df.to_string(index=False, max_colwidth=55))
+        
         print(f"📡 信號                  : {signal_names.get(regime_signal,'無信號')}")
         print(f"🚦 決策                  : {status_text}")
         print("-" * 60)
