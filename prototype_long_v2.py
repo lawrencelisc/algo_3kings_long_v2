@@ -11,6 +11,7 @@ from datetime import datetime
 # 嘗試導入Telegram Bot
 try:
     from telegram_bot import telegram_notifier
+
     TELEGRAM_ENABLED = telegram_notifier.enabled
     if TELEGRAM_ENABLED:
         print("✅ Telegram Bot 已成功加載")
@@ -30,9 +31,10 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger('AlgoTrade_Long_V6.7_BugFixed')
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
-API_KEY    = os.getenv('BYBIT_API_KEY')
+API_KEY = os.getenv('BYBIT_API_KEY')
 API_SECRET = os.getenv('BYBIT_SECRET')
 
 if not API_KEY or not API_SECRET:
@@ -61,9 +63,10 @@ for retry in range(max_retries):
             # 不退出，讓程式繼續嘗試
         else:
             wait_time = 2 ** retry
-            logger.warning(f"⚠️ 加載市場信息失敗 (嘗試 {retry+1}/{max_retries}): {str(e)[:100]}...")
+            logger.warning(f"⚠️ 加載市場信息失敗 (嘗試 {retry + 1}/{max_retries}): {str(e)[:100]}...")
             logger.warning(f"   等待 {wait_time} 秒後重試...")
             time.sleep(wait_time)
+
 
 # 符號轉換輔助函數
 def convert_to_bybit_symbol(ccxt_symbol):
@@ -81,6 +84,7 @@ def convert_to_bybit_symbol(ccxt_symbol):
             base = ccxt_symbol.replace('/USDT:USDT', '')
             return f"{base}USDT"
         return ccxt_symbol
+
 
 # ==========================================
 # ⚙️ [FIX-SIM] Simulation 模式開關
@@ -101,22 +105,22 @@ SIMULATION_MODE = os.getenv('SIMULATION_MODE', 'false').lower() == 'true'
 
 # Sim 帳本狀態（僅 SIMULATION_MODE=True 時有效）
 SIM_INITIAL_BALANCE = float(os.getenv('SIM_BALANCE', '1000.0'))
-sim_balance         = SIM_INITIAL_BALANCE   # 可用 USDT 餘額
-sim_equity          = SIM_INITIAL_BALANCE   # 總資產（含未實現 PnL）
-sim_positions: dict = {}                    # {symbol: {amount, entry_price, tp, sl, ...}}
-sim_trade_count     = 0                     # 累計成交筆數
-sim_total_pnl       = 0.0                   # 累計已實現 PnL
+sim_balance = SIM_INITIAL_BALANCE  # 可用 USDT 餘額
+sim_equity = SIM_INITIAL_BALANCE  # 總資產（含未實現 PnL）
+sim_positions: dict = {}  # {symbol: {amount, entry_price, tp, sl, ...}}
+sim_trade_count = 0  # 累計成交筆數
+sim_total_pnl = 0.0  # 累計已實現 PnL
 
 # ==========================================
 # 📁 檔案與路徑設定
 # ==========================================
-LOG_DIR    = "result"
+LOG_DIR = "result"
 STATUS_DIR = "../status"
 
 # Sim/Live 使用不同 CSV，避免數據污染
-_mode_tag      = "sim" if SIMULATION_MODE else "live"
-LOG_FILE       = f"{LOG_DIR}/{_mode_tag}_long_log.csv"
-STATUS_FILE    = f"{STATUS_DIR}/btc_regime_long.csv"
+_mode_tag = "sim" if SIMULATION_MODE else "live"
+LOG_FILE = f"{LOG_DIR}/{_mode_tag}_long_log.csv"
+STATUS_FILE = f"{STATUS_DIR}/btc_regime_long.csv"
 BLACKLIST_FILE = f"{STATUS_DIR}/dynamic_blacklist_long.json"
 
 if not os.path.exists(LOG_DIR):    os.makedirs(LOG_DIR)
@@ -131,69 +135,66 @@ if SIMULATION_MODE:
     print("=" * 60)
 
 # 系統狀態記憶體
-positions          = {}
-cooldown_tracker   = {}
+positions = {}
+cooldown_tracker = {}
 consecutive_losses = {}
-recent_sl_times    = []  # Cascade Pause 追蹤器
+recent_sl_times = []  # Cascade Pause 追蹤器
 
 # ADX 和 Score 趨勢追蹤
-_last_scout_adx    = 0.0   # 上次 scout 的 ADX
-_last_scout_score  = 0.0   # 上次 scout 的 Score
+_last_scout_adx = 0.0  # 上次 scout 的 ADX
+_last_scout_score = 0.0  # 上次 scout 的 Score
 
 # 市場狀態記憶（用於Telegram通知）
-_last_market_signal = 0     # 上次市場信號
+_last_market_signal = 0  # 上次市場信號
 _last_market_notification_time = 0  # 上次通知時間
 
 # ==========================================
 # ⚙️ [系統/參數] 策略與風控全局變數
 # ==========================================
-WORKING_CAPITAL        = 1000.0
-MAX_LEVERAGE           = 10.0
-RISK_PER_TRADE         = 0.005
-MIN_NOTIONAL           = 5.0
+WORKING_CAPITAL = 1000.0
+MAX_LEVERAGE = 10.0
+RISK_PER_TRADE = 0.005
+MIN_NOTIONAL = 5.0
 MAX_NOTIONAL_PER_TRADE = 200.0
 
 NET_FLOW_SIGMA = 1.2
-TP_ATR_MULT    = 5.0
-SL_ATR_MULT    = 3.0
+TP_ATR_MULT = 5.0
+SL_ATR_MULT = 3.0
 
 MAX_CONSECUTIVE_LOSSES = 3
-DYNAMIC_BAN_DURATION   = 86400
+DYNAMIC_BAN_DURATION = 86400
 
-# 交易手續費（Bybit taker fee）— 統一管理
-FEE_RATE       = 0.00055   # 0.055%
+MAX_CONCURRENT_POSITIONS = 5
+CASCADE_SL_WINDOW = 180  # 秒
+CASCADE_SL_TRIGGER = 2  # 筆
 
-MAX_CONCURRENT_POSITIONS = 6
-CASCADE_SL_WINDOW = 180    # 秒
-CASCADE_SL_TRIGGER = 2     # 筆
-
-SCOUTING_INTERVAL       = 125
+SCOUTING_INTERVAL = 125
 POSITION_CHECK_INTERVAL = 4
 
 BRAKE_ADX_HIGH_THRESHOLD = 40
-TIMEOUT_SECONDS          = 2700
+TIMEOUT_SECONDS = 2700
 
-ACTIVE_LONG_SIGNALS  = [2]         # 測試期只用 +2 Trend Long
-ACTIVE_SHORT_SIGNALS = [-2, -3]    # 排除 -1 MR Short
+ACTIVE_LONG_SIGNALS = [2]  # 測試期只用 +2 Trend Long
+ACTIVE_SHORT_SIGNALS = [-2, -3]  # 排除 -1 MR Short
 
 # ==========================================
 # 🚀 緩存設定
 # ==========================================
-REGIME_CACHE_TTL    = 60
+REGIME_CACHE_TTL = 60
 POSITIONS_CACHE_TTL = 8
-ATR_CACHE_TTL       = 60
+ATR_CACHE_TTL = 60
 
-_regime_cache    = {'data': None, 'ts': 0}
+_regime_cache = {'data': None, 'ts': 0}
 _positions_cache = {'data': None, 'ts': 0}
-_atr_cache       = {}
+_atr_cache = {}
 
 BLACKLIST = [
-    'USDC/USDT:USDT', 'DAI/USDT:USDT',  'FDUSD/USDT:USDT', 'BUSD/USDT:USDT',
-    'TUSD/USDT:USDT', 'PYUSD/USDT:USDT','USDP/USDT:USDT',  'EURS/USDT:USDT',
-    'USDE/USDT:USDT', 'USAT/USDT:USDT', 'USD0/USDT:USDT',  'USTC/USDT:USDT',
-    'LUSD/USDT:USDT', 'FRAX/USDT:USDT', 'MIM/USDT:USDT',   'RLUSD/USDT:USDT',
-    'WBTC/USDT:USDT', 'WETH/USDT:USDT', 'WBNB/USDT:USDT',  'WAVAX/USDT:USDT',
-    'stETH/USDT:USDT','cbETH/USDT:USDT','WHT/USDT:USDT'
+    'USDC/USDT:USDT', 'DAI/USDT:USDT', 'FDUSD/USDT:USDT', 'BUSD/USDT:USDT',
+    'TUSD/USDT:USDT', 'PYUSD/USDT:USDT', 'USDP/USDT:USDT', 'EURS/USDT:USDT',
+    'USDE/USDT:USDT', 'USAT/USDT:USDT', 'USD0/USDT:USDT', 'USTC/USDT:USDT',
+    'LUSD/USDT:USDT', 'FRAX/USDT:USDT', 'MIM/USDT:USDT', 'RLUSD/USDT:USDT',
+    'WBTC/USDT:USDT', 'WETH/USDT:USDT', 'WBNB/USDT:USDT', 'WAVAX/USDT:USDT',
+    'stETH/USDT:USDT', 'cbETH/USDT:USDT', 'WHT/USDT:USDT'
 ]
 
 WHITELIST = [
@@ -209,7 +210,7 @@ CSV_COLUMNS = [
     'atr', 'net_flow', 'tp_price', 'sl_price', 'reason',
     'realized_pnl', 'actual_balance', 'effective_balance',
     'sim_mode', 'sim_equity', 'sim_total_pnl',
-    'regime_signal', 'mean_adx', 'market_score'    # ← 新增
+    'regime_signal', 'mean_adx', 'market_score'  # ← 新增
 ]
 STATUS_COLUMNS = [
     'timestamp', 'btc_price', 'target_price', 'hma20', 'hma50',
@@ -226,8 +227,8 @@ def log_to_csv(data_dict):
     row['timestamp'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     # [FIX-SIM] Sim 模式自動標記
     if SIMULATION_MODE:
-        row['sim_mode']      = 'SIM'
-        row['sim_equity']    = round(sim_equity, 4)
+        row['sim_mode'] = 'SIM'
+        row['sim_equity'] = round(sim_equity, 4)
         row['sim_total_pnl'] = round(sim_total_pnl, 4)
     pd.DataFrame([row], columns=CSV_COLUMNS).to_csv(
         LOG_FILE, mode='a', index=False, header=not os.path.exists(LOG_FILE)
@@ -254,12 +255,12 @@ def sim_open_long(symbol, amount, price):
     - 返回 (actual_amount, actual_price) 或 (0, 0) 若餘額不足
     """
     global sim_balance, sim_trade_count
-    fee      = amount * price * 0.00055   # Bybit taker fee
-    cost     = amount * price + fee
+    fee = amount * price * 0.00055  # Bybit taker fee
+    cost = amount * price + fee
     if sim_balance < cost:
         logger.warning(f"🔵 [SIM] {symbol} 餘額不足 (需 {cost:.2f}, 有 {sim_balance:.2f})")
         return 0, 0
-    sim_balance     -= cost
+    sim_balance -= cost
     sim_trade_count += 1
     logger.info(f"🔵 [SIM] OPEN LONG {symbol} | 數量:{amount} @ {price:.4f} | 費用:{fee:.4f} | 餘額:{sim_balance:.2f}")
     return amount, price
@@ -276,16 +277,16 @@ def sim_close_long(symbol, amount, price):
     if symbol not in sim_positions:
         logger.warning(f"🔵 [SIM] {symbol} 找不到持倉，無法平倉")
         return 0.0
-    pos         = sim_positions[symbol]
+    pos = sim_positions[symbol]
     entry_price = pos['entry_price']
-    fee         = amount * price * FEE_RATE
-    gross_pnl   = (price - entry_price) * amount
-    net_pnl     = gross_pnl - fee
-    proceeds    = amount * price - fee
-    sim_balance    += proceeds
-    sim_total_pnl  += net_pnl
+    fee = amount * price * 0.00055
+    gross_pnl = (price - entry_price) * amount
+    net_pnl = gross_pnl - fee
+    proceeds = amount * price - fee
+    sim_balance += proceeds
+    sim_total_pnl += net_pnl
     sim_trade_count += 1
-    sim_equity      = sim_balance + sum(
+    sim_equity = sim_balance + sum(
         sim_positions[s]['amount'] * exchange.fetch_ticker(s)['last']
         for s in sim_positions if s != symbol
     ) if len(sim_positions) > 1 else sim_balance
@@ -304,13 +305,13 @@ def sim_get_positions():
     result = []
     for symbol, pos in sim_positions.items():
         result.append({
-            'symbol':     symbol,
-            'side':       'long',
-            'contracts':  pos['amount'],
+            'symbol': symbol,
+            'side': 'long',
+            'contracts': pos['amount'],
             'entryPrice': pos['entry_price'],
-            'stopLoss':   pos.get('sl_price', 0),
+            'stopLoss': pos.get('sl_price', 0),
             'takeProfit': pos.get('tp_price', 0),
-            'info':       {'side': 'Buy'},
+            'info': {'side': 'Buy'},
             'createdTime': pos.get('entry_time', time.time()) * 1000
         })
     return result
@@ -323,12 +324,12 @@ def sim_report():
     unrealized = 0.0
     for symbol, pos in sim_positions.items():
         try:
-            curr_p    = exchange.fetch_ticker(symbol)['last']
+            curr_p = exchange.fetch_ticker(symbol)['last']
             unrealized += (curr_p - pos['entry_price']) * pos['amount']
         except:
             pass
     sim_equity = sim_balance + unrealized
-    roi        = (sim_equity - SIM_INITIAL_BALANCE) / SIM_INITIAL_BALANCE * 100
+    roi = (sim_equity - SIM_INITIAL_BALANCE) / SIM_INITIAL_BALANCE * 100
 
     print("=" * 60)
     print("📊 [SIM] 績效摘要")
@@ -384,7 +385,7 @@ def process_native_exit_log(symbol, pos, position_type='long'):
     """
     if SIMULATION_MODE:
         try:
-            curr_p   = exchange.fetch_ticker(symbol)['last']
+            curr_p = exchange.fetch_ticker(symbol)['last']
         except:
             curr_p = pos['entry_price']
         real_pnl = round((curr_p - pos['entry_price']) * pos['amount'], 4)
@@ -397,7 +398,7 @@ def process_native_exit_log(symbol, pos, position_type='long'):
 
     # ── Live 原有邏輯 ──
     real_exit_price = pos['entry_price']
-    real_pnl        = 0.0
+    real_pnl = 0.0
     try:
         pnl_res = exchange.private_get_v5_position_closed_pnl({
             'category': 'linear',
@@ -405,17 +406,17 @@ def process_native_exit_log(symbol, pos, position_type='long'):
             'limit': 1
         })
         if pnl_res and pnl_res.get('result') and pnl_res['result'].get('list'):
-            last_trade      = pnl_res['result']['list'][0]
+            last_trade = pnl_res['result']['list'][0]
             real_exit_price = float(last_trade['avgExitPrice'])
-            real_pnl        = float(last_trade['closedPnl'])
+            real_pnl = float(last_trade['closedPnl'])
         else:
             raise ValueError("empty")
     except Exception as e:
         logger.debug(f"⚠️ {symbol} PnL 備用估算: {e}")
         try:
-            curr_p          = exchange.fetch_ticker(symbol)['last']
+            curr_p = exchange.fetch_ticker(symbol)['last']
             real_exit_price = curr_p
-            real_pnl        = round((curr_p - pos['entry_price']) * pos['amount'], 4)
+            real_pnl = round((curr_p - pos['entry_price']) * pos['amount'], 4)
         except:
             pass
 
@@ -440,7 +441,7 @@ def get_live_positions_cached():
     try:
         data = exchange.fetch_positions(params={'category': 'linear'})
         _positions_cache['data'] = data
-        _positions_cache['ts']   = time.time()
+        _positions_cache['ts'] = time.time()
         return data
     except Exception as e:
         logger.warning(f"⚠️ fetch_positions 失敗: {e}")
@@ -452,7 +453,7 @@ def get_live_positions_cached():
 # ==========================================
 def get_3_layer_avg_price(symbol, side='bids'):
     try:
-        ob     = exchange.fetch_order_book(symbol, limit=5)
+        ob = exchange.fetch_order_book(symbol, limit=5)
         levels = ob[side][:3]
         return sum([lv[0] for lv in levels]) / len(levels)
     except:
@@ -476,13 +477,13 @@ def get_market_metrics(symbol):
                 limit=100,  # 減少數據量
                 params={'category': 'linear'}
             )
-            
-            df    = pd.DataFrame(ohlcv, columns=['ts', 'o', 'h', 'l', 'c', 'v'])
+
+            df = pd.DataFrame(ohlcv, columns=['ts', 'o', 'h', 'l', 'c', 'v'])
             df['tr'] = np.maximum(
                 df['h'] - df['l'],
                 np.maximum(abs(df['h'] - df['c'].shift(1)), abs(df['l'] - df['c'].shift(1)))
             )
-            atr         = df['tr'].rolling(14, min_periods=1).mean().iloc[-1]
+            atr = df['tr'].rolling(14, min_periods=1).mean().iloc[-1]
             is_volatile = (atr / df['c'].iloc[-1]) > 0.0015
 
             if pd.isna(atr) or atr == 0:
@@ -490,13 +491,13 @@ def get_market_metrics(symbol):
 
             _atr_cache[symbol] = {'atr': atr, 'is_volatile': is_volatile, 'ts': time.time()}
             return atr, is_volatile
-            
+
         except Exception as e:
             if retry == max_retries - 1:
                 logger.warning(f"⚠️ {symbol} ATR計算失敗: {str(e)[:80]}...")
                 return None, False
             time.sleep(2 ** retry)  # 指數退避
-    
+
     return None, False
 
 
@@ -539,7 +540,7 @@ def load_dynamic_blacklist():
                 data = json.load(f)
             consecutive_losses.update(data.get('consecutive_losses', {}))
             cooldown_tracker.update(data.get('cooldown_tracker', {}))
-            curr_t  = time.time()
+            curr_t = time.time()
             expired = [k for k, v in cooldown_tracker.items() if v < curr_t]
             for k in expired:
                 del cooldown_tracker[k]
@@ -566,30 +567,40 @@ def handle_trade_result(symbol, pnl):
     save_dynamic_blacklist()
 
 
+# ==========================================
+# ╔══════════════════════════════════════╗
+# ║  🔧 BUG FIX 1：score vs mr_thr      ║
+# ║     量綱錯誤修復                      ║
+# ║  🔧 BUG FIX 2：MACRO_BEAR_CONSEC    ║
+# ║     > 資料長度修復                    ║
+# ║  🔧 BUG FIX 3：rolling_7d_return    ║
+# ║     np.roll 計算錯誤修復              ║
+# ╚══════════════════════════════════════╝
+# ==========================================
 def get_btc_regime_v3_fast():
     """
     雙向市場狀態檢測器 V6.7（三項 Bug 修復版）
 
-
-     BUG FIX 1：score 量綱修復
-       舊版：mr_thr = percentile(ADX_values, 70) ≈ 30~50
-             score ∈ [0, 1]  → score >= mr_thr 永遠 False
-       新版：MR_SCORE_THR = 0.55（固定，與 score 同量綱）
-             TR_SCORE_THR = 0.35
-             all_scores 改為追蹤複合分數，供 percentile 用
-
-     BUG FIX 2：MACRO_BEAR_CONSEC 修復
-       舊版：RET_7D_BARS = 2016，CONSEC = 144
-             但 limit=300 → consec 永遠累不到 144
-       新版：RET_7D_BARS = 288（1天，在300根內有效）
-             MACRO_BEAR_CONSEC = 36（3小時，可在300根內觸發）
-
-     BUG FIX 3：rolling_7d_return np.roll 修復
-       舊版：np.roll(closes, win) 前 win 個值是陣列末尾，
-             計算出來的收益率在 index < win 全部是垃圾值
-       新版：直接切片 closes[:-win] / closes[win:]
-             只計算 index >= win 的部分
-
+    ┌─────────────────────────────────────────────────────────┐
+    │ BUG FIX 1：score 量綱修復                               │
+    │   舊版：mr_thr = percentile(ADX_values, 70) ≈ 30~50    │
+    │         score ∈ [0, 1]  → score >= mr_thr 永遠 False   │
+    │   新版：MR_SCORE_THR = 0.55（固定，與 score 同量綱）    │
+    │         TR_SCORE_THR = 0.35                             │
+    │         all_scores 改為追蹤複合分數，供 percentile 用   │
+    │                                                         │
+    │ BUG FIX 2：MACRO_BEAR_CONSEC 修復                      │
+    │   舊版：RET_7D_BARS = 2016，CONSEC = 144               │
+    │         但 limit=300 → consec 永遠累不到 144            │
+    │   新版：RET_7D_BARS = 288（1天，在300根內有效）         │
+    │         MACRO_BEAR_CONSEC = 36（3小時，可在300根內觸發）│
+    │                                                         │
+    │ BUG FIX 3：rolling_7d_return np.roll 修復              │
+    │   舊版：np.roll(closes, win) 前 win 個值是陣列末尾，   │
+    │         計算出來的收益率在 index < win 全部是垃圾值     │
+    │   新版：直接切片 closes[:-win] / closes[win:]           │
+    │         只計算 index >= win 的部分                      │
+    └─────────────────────────────────────────────────────────┘
 
     信號類型：
       +1  MR 多頭（均值回歸看漲）
@@ -604,26 +615,26 @@ def get_btc_regime_v3_fast():
 
     try:
         TIMEFRAME = '5m'
-        OHLCV_LIMIT = 300           # fetch 根數
+        OHLCV_LIMIT = 300  # fetch 根數
 
         # ── 技術指標參數 ──
-        ADX_WIN    = 14
-        BB_WIN     = 20
+        ADX_WIN = 14
+        BB_WIN = 20
         ZSCORE_WIN = 60
-        ATR_WIN    = 14
-        EMA_WIN    = 21
+        ATR_WIN = 14
+        EMA_WIN = 21
 
         # ── [BUG FIX 1] 固定閾值，與 score ∈ [0,1] 同量綱 ──
-        MR_SCORE_THR   = 0.55   # score > 0.55 → MR 市況
-        TR_SCORE_THR   = 0.40   # score ≤ 0.40 → 趨勢市況
+        MR_SCORE_THR = 0.55  # score > 0.55 → MR 市況
+        TR_SCORE_THR = 0.40  # score ≤ 0.40 → 趨勢市況
 
         # ── Z-Score 百分位（保留動態，量綱本身就是 z-score）──
-        Z_LONG_PCT  = 20
+        Z_LONG_PCT = 20
         Z_SHORT_PCT = 80
 
         # ── EMA / BB 參數 ──
         EMA_SLOPE_BARS = 3
-        TR_BB_PCT      = 60
+        TR_BB_PCT = 60
 
         # ── 高波動參數 ──
         HVOL_ATR_PCT = 85
@@ -632,101 +643,105 @@ def get_btc_regime_v3_fast():
         #   RET_7D_BARS      = 288  →  1天 (288根 × 5min = 1440min = 24h)
         #   MACRO_BEAR_CONSEC = 36  →  3小時 (36根 × 5min = 180min)
         #   MACRO_BULL_RTN_THR 不變
-        RET_7D_BARS        = 288    # [BUG FIX 2] 舊值 2016 → 288
-        MACRO_BEAR_RTN_THR = -0.03
-        MACRO_BULL_RTN_THR = +0.02
-        MACRO_BEAR_CONSEC  = 36     # [BUG FIX 2] 舊值 144 → 36
+        RET_7D_BARS = 288  # [BUG FIX 2] 舊值 2016 → 288
+        MACRO_BEAR_RTN_THR = -0.04
+        MACRO_BULL_RTN_THR = +0.03
+        MACRO_BEAR_CONSEC = 36  # [BUG FIX 2] 舊值 144 → 36
 
         # ── 權重（四個指標等權）──
         W1, W2, W3, W4 = 0.25, 0.25, 0.25, 0.25
 
-        REGIME_ASSETS = [
-            'BTC/USDT:USDT', 'ETH/USDT:USDT', 'SOL/USDT:USDT',
-            'BNB/USDT:USDT', 'XRP/USDT:USDT', 'AVAX/USDT:USDT',
-            'ADA/USDT:USDT', 'DOGE/USDT:USDT'
-        ]
+        REGIME_ASSETS = ['BTC/USDT:USDT', 'ETH/USDT:USDT', 'SOL/USDT:USDT']
 
         # ────────────────────────────────────────────────
         # 內部指標函數
         # ────────────────────────────────────────────────
         def rolling_adx_simple(highs, lows, closes, win=ADX_WIN):
             """Wilder 平滑 ADX（純 NumPy，已向量化 TR/DM）"""
-            n   = len(closes)
+            n = len(closes)
             adx = np.full(n, 25.0)
             pdi = np.full(n, 25.0)
             ndi = np.full(n, 25.0)
 
-            prev_h = np.roll(highs, 1);  prev_h[0] = highs[0]
-            prev_l = np.roll(lows,  1);  prev_l[0] = lows[0]
-            prev_c = np.roll(closes, 1); prev_c[0] = closes[0]
+            prev_h = np.roll(highs, 1);
+            prev_h[0] = highs[0]
+            prev_l = np.roll(lows, 1);
+            prev_l[0] = lows[0]
+            prev_c = np.roll(closes, 1);
+            prev_c[0] = closes[0]
 
-            hl  = highs - lows
+            hl = highs - lows
             hpc = np.abs(highs - prev_c)
-            lpc = np.abs(lows  - prev_c)
-            tr  = np.maximum(hl, np.maximum(hpc, lpc))
+            lpc = np.abs(lows - prev_c)
+            tr = np.maximum(hl, np.maximum(hpc, lpc))
             tr[0] = hl[0]
 
-            up  = highs - prev_h
-            dn  = prev_l - lows
+            up = highs - prev_h
+            dn = prev_l - lows
             pdm = np.where((up > dn) & (up > 0), up, 0.0)
             ndm = np.where((dn > up) & (dn > 0), dn, 0.0)
 
             if n > win:
-                atr_s = np.zeros(n); pdm_s = np.zeros(n); ndm_s = np.zeros(n)
-                atr_s[win] = tr[1:win+1].sum()
-                pdm_s[win] = pdm[1:win+1].sum()
-                ndm_s[win] = ndm[1:win+1].sum()
-                for i in range(win+1, n):
-                    atr_s[i] = atr_s[i-1] - atr_s[i-1]/win + tr[i]
-                    pdm_s[i] = pdm_s[i-1] - pdm_s[i-1]/win + pdm[i]
-                    ndm_s[i] = ndm_s[i-1] - ndm_s[i-1]/win + ndm[i]
+                atr_s = np.zeros(n);
+                pdm_s = np.zeros(n);
+                ndm_s = np.zeros(n)
+                atr_s[win] = tr[1:win + 1].sum()
+                pdm_s[win] = pdm[1:win + 1].sum()
+                ndm_s[win] = ndm[1:win + 1].sum()
+                for i in range(win + 1, n):
+                    atr_s[i] = atr_s[i - 1] - atr_s[i - 1] / win + tr[i]
+                    pdm_s[i] = pdm_s[i - 1] - pdm_s[i - 1] / win + pdm[i]
+                    ndm_s[i] = ndm_s[i - 1] - ndm_s[i - 1] / win + ndm[i]
 
                 with np.errstate(divide='ignore', invalid='ignore'):
-                    _pdi = np.where(atr_s > 0, 100*pdm_s/atr_s, 0.0)
-                    _ndi = np.where(atr_s > 0, 100*ndm_s/atr_s, 0.0)
-                    dx   = np.where((_pdi+_ndi) > 0,
-                                    100*np.abs(_pdi-_ndi)/(_pdi+_ndi), 0.0)
+                    _pdi = np.where(atr_s > 0, 100 * pdm_s / atr_s, 0.0)
+                    _ndi = np.where(atr_s > 0, 100 * ndm_s / atr_s, 0.0)
+                    dx = np.where((_pdi + _ndi) > 0,
+                                  100 * np.abs(_pdi - _ndi) / (_pdi + _ndi), 0.0)
 
-                adx[2*win] = dx[win:2*win].mean()
-                for i in range(2*win+1, n):
-                    adx[i] = (adx[i-1]*(win-1) + dx[i]) / win
-                adx[:2*win] = adx[2*win]
-                pdi[win:] = _pdi[win:]; pdi[:win] = _pdi[win]
-                ndi[win:] = _ndi[win:]; ndi[:win] = _ndi[win]
+                adx[2 * win] = dx[win:2 * win].mean()
+                for i in range(2 * win + 1, n):
+                    adx[i] = (adx[i - 1] * (win - 1) + dx[i]) / win
+                adx[:2 * win] = adx[2 * win]
+                pdi[win:] = _pdi[win:];
+                pdi[:win] = _pdi[win]
+                ndi[win:] = _ndi[win:];
+                ndi[:win] = _ndi[win]
 
             return adx, pdi, ndi
 
         def rolling_bbwidth_fast(closes, win=BB_WIN):
-            s   = pd.Series(closes)
+            s = pd.Series(closes)
             mid = s.rolling(win).mean()
             std = s.rolling(win).std(ddof=0)
-            bbw = (4*std / mid.replace(0, np.nan)).fillna(0.0).values.copy()
-            fv  = win - 1
+            bbw = (4 * std / mid.replace(0, np.nan)).fillna(0.0).values.copy()
+            fv = win - 1
             if len(bbw) > fv and bbw[fv] != 0.0:
                 bbw[:fv] = bbw[fv]
             return bbw
 
         def rolling_zscore_fast(closes, win=ZSCORE_WIN):
-            s  = pd.Series(closes)
+            s = pd.Series(closes)
             mu = s.rolling(win).mean()
             sg = s.rolling(win).std(ddof=0)
             return ((s - mu) / sg.replace(0, np.nan)).fillna(0.0).values
 
         def rolling_ema(closes, win=EMA_WIN):
-            ema   = np.zeros(len(closes))
+            ema = np.zeros(len(closes))
             alpha = 2.0 / (win + 1)
             ema[0] = closes[0]
             for i in range(1, len(closes)):
-                ema[i] = alpha*closes[i] + (1-alpha)*ema[i-1]
+                ema[i] = alpha * closes[i] + (1 - alpha) * ema[i - 1]
             return ema
 
         def rolling_atr_pct_fast(highs, lows, closes, win=ATR_WIN):
-            prev_c = np.roll(closes, 1); prev_c[0] = closes[0]
-            tr     = np.maximum(highs-lows,
-                                np.maximum(np.abs(highs-prev_c), np.abs(lows-prev_c)))
-            tr[0]  = highs[0] - lows[0]
-            atr    = pd.Series(tr).ewm(span=win, adjust=False).mean().values
-            return np.where(closes > 0, atr/closes, 0.0)
+            prev_c = np.roll(closes, 1);
+            prev_c[0] = closes[0]
+            tr = np.maximum(highs - lows,
+                            np.maximum(np.abs(highs - prev_c), np.abs(lows - prev_c)))
+            tr[0] = highs[0] - lows[0]
+            atr = pd.Series(tr).ewm(span=win, adjust=False).mean().values
+            return np.where(closes > 0, atr / closes, 0.0)
 
         # ── [BUG FIX 3] rolling_7d_return：使用切片取代 np.roll ──
         def rolling_return(closes, win=RET_7D_BARS):
@@ -738,15 +753,16 @@ def get_btc_regime_v3_fast():
               計算出來的收益率在最早期的 win 根是垃圾值。
             新版：只計算 index >= win 的部分，其餘填 0.0
             """
-            n      = len(closes)
-            ret    = np.zeros(n)
+            n = len(closes)
+            ret = np.zeros(n)
             if n <= win:
-                return ret                     # 資料不足，全部返回 0
-            prev   = closes[:-win]             # closes[0 .. n-win-1]
-            curr   = closes[win:]              # closes[win .. n-1]
-            valid  = prev > 0
+                return ret  # 資料不足，全部返回 0
+            prev = closes[:-win]  # closes[0 .. n-win-1]
+            curr = closes[win:]  # closes[win .. n-1]
+            valid = prev > 0
             ret[win:] = np.where(valid, (curr - prev) / prev, 0.0)
             return ret
+
         # ── [BUG FIX 3 END] ──
 
         # ────────────────────────────────────────────────
@@ -756,11 +772,11 @@ def get_btc_regime_v3_fast():
         regime_data = {}
 
         # [BUG FIX 1] 改為追蹤複合 score，不再混入 ADX
-        all_scores_list  = []   # 收集各幣各 bar 的複合 score
-        all_z_scores     = []
-        all_bbw          = []
-        all_atr_pct      = []
-        all_ret_list     = []
+        all_scores_list = []  # 收集各幣各 bar 的複合 score
+        all_z_scores = []
+        all_bbw = []
+        all_atr_pct = []
+        all_ret_list = []
 
         for sym in REGIME_ASSETS:
             try:
@@ -775,18 +791,18 @@ def get_btc_regime_v3_fast():
                 if len(ohlcv) < 100:
                     continue
 
-                df     = pd.DataFrame(ohlcv, columns=['ts', 'o', 'h', 'l', 'c', 'v'])
+                df = pd.DataFrame(ohlcv, columns=['ts', 'o', 'h', 'l', 'c', 'v'])
                 closes = df['c'].values.astype(float)
-                highs  = df['h'].values.astype(float)
-                lows   = df['l'].values.astype(float)
+                highs = df['h'].values.astype(float)
+                lows = df['l'].values.astype(float)
 
                 adx, pdi, ndi = rolling_adx_simple(highs, lows, closes)
-                bbw           = rolling_bbwidth_fast(closes)
-                zscore        = rolling_zscore_fast(closes)
-                ema21         = rolling_ema(closes, EMA_WIN)
-                ema_slope     = np.diff(ema21, prepend=ema21[0])
-                atr_pct       = rolling_atr_pct_fast(highs, lows, closes)
-                ret_arr       = rolling_return(closes, RET_7D_BARS)  # [BUG FIX 3]
+                bbw = rolling_bbwidth_fast(closes)
+                zscore = rolling_zscore_fast(closes)
+                ema21 = rolling_ema(closes, EMA_WIN)
+                ema_slope = np.diff(ema21, prepend=ema21[0])
+                atr_pct = rolling_atr_pct_fast(highs, lows, closes)
+                ret_arr = rolling_return(closes, RET_7D_BARS)  # [BUG FIX 3]
 
                 regime_data[sym] = {
                     'closes': closes, 'adx': adx, 'bbw': bbw,
@@ -800,20 +816,20 @@ def get_btc_regime_v3_fast():
                 start_idx = max(0, len(closes) - 50)
 
                 # 逐 bar 計算複合 score 並加入 all_scores_list
-                adx_vals  = adx[start_idx:]
-                bbw_vals  = bbw[start_idx:]
-                z_vals    = zscore[start_idx:]
-                atr_vals  = atr_pct[start_idx:]
-                ret_vals  = ret_arr[start_idx:]
+                adx_vals = adx[start_idx:]
+                bbw_vals = bbw[start_idx:]
+                z_vals = zscore[start_idx:]
+                atr_vals = atr_pct[start_idx:]
+                ret_vals = ret_arr[start_idx:]
 
                 # 前置計算 bar-level score（暫用 adx/bbw/z 的三項近似，Hurst 後續可擴充）
                 adx_lo_b = np.percentile(adx_vals, 10) if len(adx_vals) else 20
                 adx_hi_b = np.percentile(adx_vals, 90) if len(adx_vals) else 50
                 bbw_lo_b = np.percentile(bbw_vals, 10) if len(bbw_vals) else 0.01
                 bbw_hi_b = np.percentile(bbw_vals, 90) if len(bbw_vals) else 0.1
-                z_abs    = np.abs(z_vals)
-                z_lo_b   = np.percentile(z_abs, 10) if len(z_abs) else 0.0
-                z_hi_b   = np.percentile(z_abs, 90) if len(z_abs) else 2.0
+                z_abs = np.abs(z_vals)
+                z_lo_b = np.percentile(z_abs, 10) if len(z_abs) else 0.0
+                z_hi_b = np.percentile(z_abs, 90) if len(z_abs) else 2.0
 
                 def _norm_arr(arr, lo, hi):
                     span = hi - lo
@@ -822,13 +838,13 @@ def get_btc_regime_v3_fast():
 
                 adx_n_arr = _norm_arr(adx_vals, adx_lo_b, adx_hi_b)
                 bbw_n_arr = _norm_arr(bbw_vals, bbw_lo_b, bbw_hi_b)
-                z_n_arr   = _norm_arr(z_abs,    z_lo_b,   z_hi_b)
+                z_n_arr = _norm_arr(z_abs, z_lo_b, z_hi_b)
 
                 # score ∈ [0, 1]，與 MR_SCORE_THR / TR_SCORE_THR 同量綱
-                bar_scores = (W1*(1 - adx_n_arr) +
-                              W2*(1 - bbw_n_arr) +
-                              W3*0.5 +             # Hurst 固定（待後續改進）
-                              W4*z_n_arr)
+                bar_scores = (W1 * (1 - adx_n_arr) +
+                              W2 * (1 - bbw_n_arr) +
+                              W3 * 0.5 +  # Hurst 固定（待後續改進）
+                              W4 * z_n_arr)
                 all_scores_list.extend(bar_scores.tolist())
 
                 all_z_scores.extend(z_vals.tolist())
@@ -844,7 +860,7 @@ def get_btc_regime_v3_fast():
             result = {'signal': 0, 'brake': False, 'soft_brake': False,
                       'brake_reason': 'No data', 'regime_signal': 0}
             _regime_cache['data'] = result
-            _regime_cache['ts']   = time.time()
+            _regime_cache['ts'] = time.time()
             return result
 
         # ────────────────────────────────────────────────
@@ -856,20 +872,23 @@ def get_btc_regime_v3_fast():
 
         # [BUG FIX 1] score 閾值改為固定常數，不再從 all_scores_list 取 percentile
         # （保留 all_scores_list 供日後擴充診斷用）
-        mr_thr = MR_SCORE_THR   # 0.55  ← 量綱修復
-        tr_thr = TR_SCORE_THR   # 0.35  ← 量綱修復
+        mr_thr = MR_SCORE_THR  # 0.55  ← 量綱修復
+        tr_thr = TR_SCORE_THR  # 0.35  ← 量綱修復
 
-        zl_thr    = safe_pct(all_z_scores, Z_LONG_PCT)
-        zs_thr    = safe_pct(all_z_scores, Z_SHORT_PCT)
-        bb_thr    = safe_pct(all_bbw,      TR_BB_PCT)
+        zl_thr = safe_pct(all_z_scores, Z_LONG_PCT)
+        zs_thr = safe_pct(all_z_scores, Z_SHORT_PCT)
+        bb_thr = safe_pct(all_bbw, TR_BB_PCT)
         bear_z_thr = safe_pct(all_z_scores, 55)
-        atr_hi    = safe_pct(all_atr_pct,  HVOL_ATR_PCT)
+        atr_hi = safe_pct(all_atr_pct, HVOL_ATR_PCT)
 
         # ────────────────────────────────────────────────
         # 最後一根 bar 的市場指標均值
         # ────────────────────────────────────────────────
-        last_adx  = []; last_bbw  = []; last_z    = []
-        last_atr  = []; last_ndipdi = []
+        last_adx = [];
+        last_bbw = [];
+        last_z = []
+        last_atr = [];
+        last_ndipdi = []
 
         for sym, data in regime_data.items():
             idx = len(data['closes']) - 1
@@ -884,13 +903,13 @@ def get_btc_regime_v3_fast():
             result = {'signal': 0, 'brake': False, 'soft_brake': False,
                       'brake_reason': 'No recent data', 'regime_signal': 0}
             _regime_cache['data'] = result
-            _regime_cache['ts']   = time.time()
+            _regime_cache['ts'] = time.time()
             return result
 
-        mean_adx    = float(np.mean(last_adx))
-        mean_bbw    = float(np.mean(last_bbw))
-        mean_z      = float(np.mean(last_z))
-        mean_atr    = float(np.mean(last_atr))
+        mean_adx = float(np.mean(last_adx))
+        mean_bbw = float(np.mean(last_bbw))
+        mean_z = float(np.mean(last_z))
+        mean_atr = float(np.mean(last_atr))
         mean_ndipdi = float(np.mean(last_ndipdi))
 
         # ── 計算當前 bar 的複合 score ──
@@ -898,19 +917,21 @@ def get_btc_regime_v3_fast():
             return float(np.clip((val - lo) / (hi - lo + 1e-9), 0.0, 1.0))
 
         all_scores_np = np.array(all_scores_list)
-        all_adx_np    = np.array(last_adx)
-        all_bbw_np    = np.array(last_bbw)
-        all_z_abs_np  = np.abs(np.array(last_z))
+        all_adx_np = np.array(last_adx)
+        all_bbw_np = np.array(last_bbw)
+        all_z_abs_np = np.abs(np.array(last_z))
 
-        adx_lo = safe_pct(all_scores_np, 10);  adx_hi = safe_pct(all_scores_np, 90)
-        bbw_lo = safe_pct(all_bbw,       10);  bbw_hi = safe_pct(all_bbw, 90)
-        z_lo   = safe_pct(np.abs(np.array(all_z_scores)), 10)
-        z_hi   = safe_pct(np.abs(np.array(all_z_scores)), 90)
+        adx_lo = safe_pct(all_scores_np, 10);
+        adx_hi = safe_pct(all_scores_np, 90)
+        bbw_lo = safe_pct(all_bbw, 10);
+        bbw_hi = safe_pct(all_bbw, 90)
+        z_lo = safe_pct(np.abs(np.array(all_z_scores)), 10)
+        z_hi = safe_pct(np.abs(np.array(all_z_scores)), 90)
 
-        adx_n  = _norm(mean_adx,        adx_lo, adx_hi)
-        bbw_n  = _norm(mean_bbw,        bbw_lo, bbw_hi)
-        z_n    = _norm(abs(mean_z),     z_lo,   z_hi)
-        score  = W1*(1-adx_n) + W2*(1-bbw_n) + W3*0.5 + W4*z_n
+        adx_n = _norm(mean_adx, adx_lo, adx_hi)
+        bbw_n = _norm(mean_bbw, bbw_lo, bbw_hi)
+        z_n = _norm(abs(mean_z), z_lo, z_hi)
+        score = W1 * (1 - adx_n) + W2 * (1 - bbw_n) + W3 * 0.5 + W4 * z_n
 
         is_highvol = (mean_atr > atr_hi)
 
@@ -928,9 +949,9 @@ def get_btc_regime_v3_fast():
             1 for sym, data in regime_data.items()
             if len(data['ret']) > 0 and data['ret'][-1] > MACRO_BULL_RTN_THR
         )
-        n_assets    = len(regime_data)
+        n_assets = len(regime_data)
         # 超過半數資產 1 天收益率 < -4% → 熊市閘門開啟
-        is_bear     = (bear_votes > n_assets // 2)
+        is_bear = (bear_votes > n_assets // 2)
         # 超過半數資產 1 天收益率 > +3% → 強制解除熊市
         if bull_votes > n_assets // 2:
             is_bear = False
@@ -941,12 +962,14 @@ def get_btc_regime_v3_fast():
             for data in ema_slope_dict.values():
                 idx = len(data) - 1
                 if idx < slope_bars: continue
-                sl  = data[idx-slope_bars+1:idx+1]
+                sl = data[idx - slope_bars + 1:idx + 1]
                 if len(sl) >= slope_bars:
-                    if np.all(sl > 0): up_c += 1
-                    elif np.all(sl < 0): dn_c += 1
+                    if np.all(sl > 0):
+                        up_c += 1
+                    elif np.all(sl < 0):
+                        dn_c += 1
             threshold = max(1, int(n_assets * 0.6))  # 60% 多數決
-            if up_c >= threshold: return  1
+            if up_c >= threshold: return 1
             if dn_c >= threshold: return -1
             return 0
 
@@ -961,7 +984,7 @@ def get_btc_regime_v3_fast():
 
         if is_highvol:
             regime_signal = 0
-        elif score >= mr_thr:             # [BUG FIX 1] score ∈[0,1] vs 0.55
+        elif score >= mr_thr:  # [BUG FIX 1] score ∈[0,1] vs 0.55
             if mean_z <= zl_thr:
                 regime_signal = 0 if is_bear else +1
             elif mean_z >= zs_thr:
@@ -976,27 +999,33 @@ def get_btc_regime_v3_fast():
 
         # ── 轉換為 signal / brake 格式（向下兼容）──
         if regime_signal > 0:
-            signal = 1; brake = False; soft_brake = False; brake_reason = ""
+            signal = 1;
+            brake = False;
+            soft_brake = False;
+            brake_reason = ""
         elif regime_signal < 0:
-            signal = -1; brake = True; soft_brake = False
+            signal = -1;
+            brake = True;
+            soft_brake = False
             brake_reason = f"市場狀態信號: {regime_signal}"
         else:
-            signal = 0; brake = False
+            signal = 0;
+            brake = False
             soft_brake = True if is_highvol else False
             brake_reason = "高波動期" if is_highvol else "市場狀態中性"
 
         btc_price = regime_data.get('BTC/USDT:USDT', {}).get('closes', [0])[-1]
 
-        signal_names = {0:"無信號", +1:"MR多頭", +2:"趨勢多頭",
-                        -1:"MR空頭", -2:"趨勢空頭", -3:"熊市強制空頭"}
-        status_text = f"📊 市場狀態: {signal_names.get(regime_signal,'未知')}"
+        signal_names = {0: "無信號", +1: "MR多頭", +2: "趨勢多頭",
+                        -1: "MR空頭", -2: "趨勢空頭", -3: "熊市強制空頭"}
+        status_text = f"📊 市場狀態: {signal_names.get(regime_signal, '未知')}"
         if is_highvol: status_text += " ⚠️ 高波動期"
         if is_bear:    status_text += " 🐻 巨集觀熊市"
 
         log_status_to_csv({
-            'btc_price':     round(btc_price, 2) if btc_price else 0,
-            'adx':           round(mean_adx, 2),
-            'signal_code':   signal,
+            'btc_price': round(btc_price, 2) if btc_price else 0,
+            'adx': round(mean_adx, 2),
+            'signal_code': signal,
             'decision_text': status_text
         })
 
@@ -1004,12 +1033,12 @@ def get_btc_regime_v3_fast():
         current_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
         print(f"🌐 市場狀態 V6.7 BugFixed（{len(regime_data)} 個資產）[{current_time}]"
               + (" [SIM]" if SIMULATION_MODE else " [LIVE]"))
-        
+
         # 顯示三個資產的現價
         btc_p = regime_data.get('BTC/USDT:USDT', {}).get('closes', [0])[-1]
         eth_p = regime_data.get('ETH/USDT:USDT', {}).get('closes', [0])[-1]
         sol_p = regime_data.get('SOL/USDT:USDT', {}).get('closes', [0])[-1]
-        
+
         # === 合併為一張表：左欄指標名，右欄對應值 ===
         labels = [
             'BTC/ETH/SOL Price', 'Composite Score', 'Z-Score', 'ADX(20/25)',
@@ -1023,11 +1052,11 @@ def get_btc_regime_v3_fast():
             f"{mean_adx:.1f} (>=20 trend | >=25 strong)",
             f"{mean_bbw:.4f} (>={bb_thr:.4f} trend)",
             f"{mean_atr:.4f} (highvol_threshold: {atr_hi:.4f})",
-            f"{'↑' if ema_dir==1 else '↓' if ema_dir==-1 else '→'}",
+            f"{'↑' if ema_dir == 1 else '↓' if ema_dir == -1 else '→'}",
             f"highvol: {'Y' if is_highvol else 'N'} | bear: {'ON' if is_bear else 'OFF'}",
-            f"{bear_votes}/{n_assets} (Pass 如果有一半資產24H跌>3%)",
-            f"{bull_votes}/{n_assets} (Pass 如果有一半資產24H升>2%)",
-            f"{signal_names.get(regime_signal,'No Signal')}",
+            f"{bear_votes}/{n_assets}",
+            f"{bull_votes}/{n_assets}",
+            f"{signal_names.get(regime_signal, 'No Signal')}",
             status_text
         ]
         max_len = max(len(l) for l in labels)
@@ -1038,19 +1067,19 @@ def get_btc_regime_v3_fast():
         for lbl, val in zip(labels, values):
             print(f"  {lbl:<{pad}}{val}")
         print("-" * sep_len)
-        
+
         # Telegram市場狀態通知（每小時或信號變化時）
         global _last_market_signal, _last_market_notification_time
         current_time = time.time()
-        
+
         # 檢查是否需要發送通知：
         # 1. 信號發生變化
         # 2. 距離上次通知超過1小時
         # 3. Telegram已啟用
-        if (TELEGRAM_ENABLED and 
-            (_last_market_signal != regime_signal or 
-             current_time - _last_market_notification_time > 3600)):
-            
+        if (TELEGRAM_ENABLED and
+                (_last_market_signal != regime_signal or
+                 current_time - _last_market_notification_time > 3600)):
+
             try:
                 # 準備市場數據（完整版）
                 market_data = {
@@ -1065,30 +1094,30 @@ def get_btc_regime_v3_fast():
                     'positions_count': len(positions),
                     'total_pnl': sim_total_pnl if SIMULATION_MODE else 0
                 }
-                
+
                 telegram_notifier.send_market_status(market_data)
-                
+
                 # 更新記憶
                 _last_market_signal = regime_signal
                 _last_market_notification_time = current_time
-                
+
             except Exception as e:
                 logger.warning(f"⚠️ Telegram市場狀態通知失敗: {e}")
 
         result = {
-            'signal':       signal,
-            'brake':        brake,
-            'soft_brake':   soft_brake,
+            'signal': signal,
+            'brake': brake,
+            'soft_brake': soft_brake,
             'brake_reason': brake_reason,
             'regime_signal': regime_signal,
             'market_score': score,
-            'mean_z':       mean_z,
-            'mean_adx':     mean_adx,
-            'is_highvol':   is_highvol,
-            'is_bear':      is_bear
+            'mean_z': mean_z,
+            'mean_adx': mean_adx,
+            'is_highvol': is_highvol,
+            'is_bear': is_bear
         }
         _regime_cache['data'] = result
-        _regime_cache['ts']   = time.time()
+        _regime_cache['ts'] = time.time()
         return result
 
     except Exception as e:
@@ -1106,12 +1135,12 @@ def get_btc_regime_v3_fast():
 def scouting_strong_coins(scouting_coins=8):
     try:
         tickers = exchange.fetch_tickers()
-        data    = []
+        data = []
         for s, t in tickers.items():
             if (s.endswith(':USDT') and
-                s in WHITELIST and
-                s not in BLACKLIST and
-                t.get('percentage') is not None):
+                    s in WHITELIST and
+                    s not in BLACKLIST and
+                    t.get('percentage') is not None):
                 ask, bid = t.get('ask'), t.get('bid')
                 if ask and bid and bid > 0:
                     spread = (ask - bid) / bid
@@ -1136,35 +1165,35 @@ def check_flow_health(symbol):
 
         df = pd.DataFrame(trades)
         df['price_change'] = df['price'].diff()
-        df['direction']    = np.where(df['price_change'] > 0, 1,
-                             np.where(df['price_change'] < 0, -1, 0))
-        df['direction']    = df['direction'].replace(0, np.nan).ffill().fillna(0)
+        df['direction'] = np.where(df['price_change'] > 0, 1,
+                                   np.where(df['price_change'] < 0, -1, 0))
+        df['direction'] = df['direction'].replace(0, np.nan).ffill().fillna(0)
 
-        avg_vol        = df['amount'].mean()
-        df['weight']   = np.where(df['amount'] > avg_vol * 2, 2.0, 1.0)
+        avg_vol = df['amount'].mean()
+        df['weight'] = np.where(df['amount'] > avg_vol * 2, 2.0, 1.0)
         df['net_flow'] = df['direction'] * df['amount'] * df['price'] * df['weight']
 
         flow_std = df['net_flow'].std()
         if flow_std == 0: return None
 
-        flow_mean      = df['net_flow'].mean()
+        flow_mean = df['net_flow'].mean()
         recent_25_flow = df['net_flow'].tail(25).sum()
-        z_score        = (recent_25_flow - (flow_mean * 25)) / (flow_std * np.sqrt(25))
+        z_score = (recent_25_flow - (flow_mean * 25)) / (flow_std * np.sqrt(25))
 
         if z_score < -3.0:
             return "Flow Reversal (Long Dump Detected)"
 
         flow_older_25 = df['net_flow'].iloc[-50:-25].sum()
-        acceleration  = recent_25_flow - flow_older_25
-        accel_z       = acceleration / (flow_std * np.sqrt(25))
+        acceleration = recent_25_flow - flow_older_25
+        accel_z = acceleration / (flow_std * np.sqrt(25))
 
         if accel_z < -2.0 and recent_25_flow < 0:
             try:
-                ob        = exchange.fetch_order_book(symbol, limit=20)
-                bids_vol  = sum([b[1] for b in ob['bids']])
-                asks_vol  = sum([a[1] for a in ob['asks']])
+                ob = exchange.fetch_order_book(symbol, limit=20)
+                bids_vol = sum([b[1] for b in ob['bids']])
+                asks_vol = sum([a[1] for a in ob['asks']])
                 imbalance = (bids_vol - asks_vol) / (bids_vol + asks_vol) \
-                            if (bids_vol + asks_vol) > 0 else 0
+                    if (bids_vol + asks_vol) > 0 else 0
                 if imbalance < -0.15:
                     return "Flow Deceleration (Momentum Died)"
             except:
@@ -1181,27 +1210,27 @@ def apply_lee_ready_long_logic(symbol):
 
         df = pd.DataFrame(trades)
         df['price_change'] = df['price'].diff()
-        df['direction']    = np.where(df['price_change'] > 0, 1,
-                             np.where(df['price_change'] < 0, -1, 0))
-        df['direction']    = df['direction'].replace(0, np.nan).ffill().fillna(0)
+        df['direction'] = np.where(df['price_change'] > 0, 1,
+                                   np.where(df['price_change'] < 0, -1, 0))
+        df['direction'] = df['direction'].replace(0, np.nan).ffill().fillna(0)
 
-        avg_vol        = df['amount'].mean()
-        df['weight']   = np.where(df['amount'] > avg_vol * 2, 2.0, 1.0)
+        avg_vol = df['amount'].mean()
+        df['weight'] = np.where(df['amount'] > avg_vol * 2, 2.0, 1.0)
         df['net_flow'] = df['direction'] * df['amount'] * df['price'] * df['weight']
 
         short_window_flow = df['net_flow'].tail(50).sum()
-        acceleration      = df['net_flow'].tail(25).sum() - df['net_flow'].iloc[-50:-25].sum()
+        acceleration = df['net_flow'].tail(25).sum() - df['net_flow'].iloc[-50:-25].sum()
 
         try:
-            ob        = exchange.fetch_order_book(symbol, limit=20)
-            bids_vol  = sum([b[1] for b in ob['bids']])
-            asks_vol  = sum([a[1] for a in ob['asks']])
+            ob = exchange.fetch_order_book(symbol, limit=20)
+            bids_vol = sum([b[1] for b in ob['bids']])
+            asks_vol = sum([a[1] for a in ob['asks']])
             imbalance = (bids_vol - asks_vol) / (bids_vol + asks_vol) \
-                        if (bids_vol + asks_vol) > 0 else 0
+                if (bids_vol + asks_vol) > 0 else 0
         except:
             imbalance = 0
 
-        z_score   = 0
+        z_score = 0
         is_strong = False
         if df['net_flow'].std() > 0:
             z_score = short_window_flow / (df['net_flow'].std() * np.sqrt(50))
@@ -1235,26 +1264,26 @@ def sync_positions_on_startup():
     print("🔄 正在同步交易所現有多倉...")
     try:
         live_positions_raw = exchange.fetch_positions()
-        live_symbols       = [p for p in live_positions_raw
-                              if float(p.get('contracts', 0) or p.get('size', 0)) > 0]
-        recovered_count    = 0
+        live_symbols = [p for p in live_positions_raw
+                        if float(p.get('contracts', 0) or p.get('size', 0)) > 0]
+        recovered_count = 0
         for p in live_symbols:
-            symbol    = p['symbol']
-            side      = p.get('side', '').lower()
+            symbol = p['symbol']
+            side = p.get('side', '').lower()
             info_side = p.get('info', {}).get('side', '').lower()
             if side in ['long', 'buy'] or info_side in ['buy', 'long']:
                 entry_price = float(p.get('entryPrice', 0))
-                amount      = float(p.get('contracts', 0) or p.get('size', 0))
-                sl_p        = float(p.get('stopLoss', 0))
-                tp_p        = float(p.get('takeProfit', 0))
-                atr, _      = get_market_metrics(symbol)
+                amount = float(p.get('contracts', 0) or p.get('size', 0))
+                sl_p = float(p.get('stopLoss', 0))
+                tp_p = float(p.get('takeProfit', 0))
+                atr, _ = get_market_metrics(symbol)
                 if not atr: atr = entry_price * 0.01
                 if sl_p == 0:
                     sl_p = float(exchange.price_to_precision(symbol,
-                                 entry_price - (SL_ATR_MULT * atr)))
+                                                             entry_price - (SL_ATR_MULT * atr)))
                 if tp_p == 0:
                     tp_p = float(exchange.price_to_precision(symbol,
-                                 entry_price + (TP_ATR_MULT * atr)))
+                                                             entry_price + (TP_ATR_MULT * atr)))
                 is_be = True if (sl_p > entry_price and sl_p > 0) else False
                 positions[symbol] = {
                     'amount': amount, 'entry_price': entry_price,
@@ -1289,12 +1318,12 @@ def manage_long_positions(regime=None):
         # ── 孤兒多單自動接管（Live only，Sim 不會有孤兒）──
         for s, p in live_symbols.items():
             if s not in positions:
-                side      = p.get('side', '').lower()
+                side = p.get('side', '').lower()
                 info_side = p.get('info', {}).get('side', '').lower()
                 if side in ['long', 'buy'] or info_side in ['buy', 'long']:
                     entry_p = float(p.get('entryPrice', 0))
-                    amt     = float(p.get('contracts', 0) or p.get('size', 0))
-                    atr, _  = get_market_metrics(s)
+                    amt = float(p.get('contracts', 0) or p.get('size', 0))
+                    atr, _ = get_market_metrics(s)
                     if not atr: atr = entry_p * 0.01
                     real_entry_time = float(
                         p.get('createdTime') or (time.time() * 1000)) / 1000.0
@@ -1339,19 +1368,19 @@ def manage_long_positions(regime=None):
                     logger.warning(f"⚠️ {s} 無現價，跳過")
                     continue
 
-                pos     = positions[s]
+                pos = positions[s]
                 pnl_pct = (curr_p - pos['entry_price']) / pos['entry_price']
                 coin_vol_pct = pos['atr'] / pos['entry_price']
-                sl_updated   = False
+                sl_updated = False
 
                 if 'max_pnl_pct' not in pos: pos['max_pnl_pct'] = pnl_pct
                 pos['max_pnl_pct'] = max(pos['max_pnl_pct'], pnl_pct)
 
                 # ── 保本 ──
                 if not pos['is_breakeven'] and pnl_pct > (coin_vol_pct * 2.0):
-                    pos['sl_price']     = pos['entry_price'] * 1.002
+                    pos['sl_price'] = pos['entry_price'] * 1.002
                     pos['is_breakeven'] = True
-                    sl_updated          = True
+                    sl_updated = True
 
                 # ── 移動止損 ──
                 if pos['is_breakeven']:
@@ -1359,7 +1388,7 @@ def manage_long_positions(regime=None):
                         trail_sl = curr_p - (0.3 * pos['atr'])
                     elif regime and regime.get('soft_brake'):
                         trail_sl = curr_p - (0.6 * pos['atr'])
-                    elif pos.get('deceleration_detected') and pnl_pct > (coin_vol_pct*2.5):
+                    elif pos.get('deceleration_detected') and pnl_pct > (coin_vol_pct * 2.5):
                         trail_sl = curr_p - (0.5 * pos['atr'])
                     elif pnl_pct > (coin_vol_pct * 5.0):
                         trail_sl = curr_p - (0.8 * pos['atr'])
@@ -1370,7 +1399,7 @@ def manage_long_positions(regime=None):
 
                     if trail_sl > pos['sl_price']:
                         if (trail_sl - pos['sl_price']) / pos['sl_price'] > 0.0005:
-                            sl_updated      = True
+                            sl_updated = True
                             pos['sl_price'] = trail_sl
 
                 # ── 推送止損到交易所（Live only）──
@@ -1386,19 +1415,30 @@ def manage_long_positions(regime=None):
 
                 # ── 離場判斷 ──
                 exit_reason = None
-                time_held   = time.time() - pos.get('entry_time', time.time())
+                time_held = time.time() - pos.get('entry_time', time.time())
 
                 if time_held > TIMEOUT_SECONDS and pnl_pct < 0.005:
                     exit_reason = "Momentum Timeout (Stalled Zombie)"
 
-                curr_t     = time.time()
+                curr_t = time.time()
                 last_check = pos.get('last_flow_check', 0)
                 if not exit_reason and (curr_t - last_check > 15):
                     pos['last_flow_check'] = curr_t
-                    if time_held > 120:
+                    # ── [FLOW-FIX] 保護期 1200 秒（20 分鐘）──
+                    # Lee-Ready 篩選出的精英入場，需要足夠時間讓趨勢發展
+                    # 實盤觀察：大升幅往往需要小時級數，過早觸發 Flow Reversal 屬誤殺
+                    # 時間軸：0-20分靜默 → 20-45分Flow啟動+價格確認 → 45分Timeout
+                    if time_held > 1200:
                         flow_status = check_flow_health(s)
                         if flow_status == "Flow Reversal (Long Dump Detected)":
-                            exit_reason = flow_status
+                            # ── [FLOW-FIX] 價格確認：現價須跌破入場價 0.5% 才視為真 Dump ──
+                            # 過濾正常市場噪音導致的假觸發（tick 自相關令 z_score 虛高）
+                            price_drawdown = (curr_p - pos['entry_price']) / pos['entry_price']
+                            if price_drawdown < -0.005:
+                                exit_reason = flow_status
+                            else:
+                                print(f"⚠️ {s} Flow Reversal 信號但價格未確認"
+                                      f"（回撤 {price_drawdown * 100:.2f}% < -0.5%），忽略")
                         elif flow_status == "Flow Deceleration (Momentum Died)":
                             if not pos.get('deceleration_detected'):
                                 pos['deceleration_detected'] = True
@@ -1413,14 +1453,14 @@ def manage_long_positions(regime=None):
 
                 # ── 執行離場 ──
                 if exit_reason:
-                    print(f"⚔️ {exit_reason} | {s} | {time_held/60:.1f}分 | "
-                          f"MaxPnL:{pos['max_pnl_pct']*100:.2f}% | 現:{pnl_pct*100:.2f}%"
+                    print(f"⚔️ {exit_reason} | {s} | {time_held / 60:.1f}分 | "
+                          f"MaxPnL:{pos['max_pnl_pct'] * 100:.2f}% | 現:{pnl_pct * 100:.2f}%"
                           + (" [SIM]" if SIMULATION_MODE else ""))
 
                     if SIMULATION_MODE:
                         # ── [FIX-SIM] Sim 模擬平倉 ──
                         ioc_price = get_3_layer_avg_price(s, 'bids') or curr_p
-                        ioc_pnl   = sim_close_long(s, pos['amount'], ioc_price)
+                        ioc_pnl = sim_close_long(s, pos['amount'], ioc_price)
                         if s in sim_positions:
                             del sim_positions[s]
                     else:
@@ -1433,18 +1473,20 @@ def manage_long_positions(regime=None):
                         except:
                             exchange.create_market_sell_order(
                                 s, pos['amount'], {'reduceOnly': True})
-                        fee = ioc_price * pos['amount'] * FEE_RATE
-                        gross_pnl = (ioc_price - pos['entry_price']) * pos['amount']
-                        ioc_pnl = round(gross_pnl - fee, 4)
-                        
-                        _positions_cache['ts'] = 0
+                        # [FIX] 扣除入場及出場 taker fee（各 0.055%）
+                        entry_fee = pos['entry_price'] * pos['amount'] * 0.00055
+                        exit_fee = ioc_price * pos['amount'] * 0.00055
+                        ioc_pnl = round(
+                            (ioc_price - pos['entry_price']) * pos['amount'] - entry_fee - exit_fee, 4
+                        )
+                        _positions_cache['ts'] = 0  # [BUG FIX 4] 清除快取
 
                     log_to_csv({
                         'symbol': s, 'action': 'LONG_EXIT', 'price': curr_p,
                         'amount': pos['amount'], 'reason': exit_reason,
                         'realized_pnl': ioc_pnl
                     })
-                    
+
                     # 發送Telegram通知
                     if TELEGRAM_ENABLED:
                         try:
@@ -1458,7 +1500,7 @@ def manage_long_positions(regime=None):
                             )
                         except Exception as e:
                             logger.warning(f"⚠️ Telegram通知發送失敗: {e}")
-                    
+
                     cancel_all_v5(s)
                     handle_trade_result(s, ioc_pnl)
                     del positions[s]
@@ -1482,21 +1524,58 @@ def execute_live_long(symbol, net_flow, current_price, is_strong,
       - create_order  → sim_open_long()
       - fetch_order   → 直接使用模擬成交資料
       - trading_stop  → 只更新本地 positions dict
-    
+
     Args:
         position_multiplier: 倉位調整乘數 (1.0=正常, 0.7=70%倉位等)
     """
-    _r                = regime or {}
+    _r = regime or {}
     regime_signal_tag = _r.get('regime_signal', 0)
-    adx_tag           = round(_r.get('mean_adx', 0), 2)
-    score_tag         = round(_r.get('market_score', 0), 4)
+    adx_tag = round(_r.get('mean_adx', 0), 2)
+    score_tag = round(_r.get('market_score', 0), 4)
 
     if symbol in cooldown_tracker:
-        if time.time() < cooldown_tracker[symbol]: return
-        else: del cooldown_tracker[symbol]
+        if time.time() < cooldown_tracker[symbol]:
+            return
+        else:
+            del cooldown_tracker[symbol]
 
     if atr is None or atr == 0 or current_price == 0: return
     if not (is_strong and is_volatile and symbol not in positions): return
+
+    # ── [DUPCHECK] 交易所實時倉位二次確認（防止 restart 後重複開倉）──
+    # 本地 positions dict 可能因重啟而與交易所不同步，需雙重確認
+    if not SIMULATION_MODE:
+        try:
+            live_pos = get_live_positions_cached()
+            live_syms = {
+                p['symbol'] for p in live_pos
+                if float(p.get('contracts', 0) or p.get('size', 0)) > 0
+            }
+            if symbol in live_syms:
+                logger.warning(f"⚠️ [DUPCHECK] {symbol} 交易所已有倉位，拒絕重複開倉（本地未同步）")
+                # 順便補回本地 dict，避免下次再觸發
+                for p in live_pos:
+                    if p['symbol'] == symbol:
+                        entry_p = float(p.get('entryPrice', 0))
+                        amt = float(p.get('contracts', 0) or p.get('size', 0))
+                        atr_v, _ = get_market_metrics(symbol)
+                        if not atr_v: atr_v = entry_p * 0.01
+                        sl_p = float(p.get('stopLoss') or 0) or float(
+                            exchange.price_to_precision(symbol, entry_p - SL_ATR_MULT * atr_v))
+                        tp_p = float(p.get('takeProfit') or 0) or float(
+                            exchange.price_to_precision(symbol, entry_p + TP_ATR_MULT * atr_v))
+                        positions[symbol] = {
+                            'amount': amt, 'entry_price': entry_p,
+                            'tp_price': tp_p, 'sl_price': sl_p,
+                            'is_breakeven': sl_p > entry_p,
+                            'atr': atr_v, 'max_pnl_pct': 0.0,
+                            'entry_time': time.time()
+                        }
+                        print(f"🔄 [DUPCHECK] 已補回 {symbol} 至本地 positions dict")
+                        break
+                return
+        except Exception as e:
+            logger.warning(f"⚠️ [DUPCHECK] {symbol} 交易所倉位查詢失敗，繼續執行: {e}")
 
     # ── 硬性倉位上限（最後防線）──
     if len(positions) >= MAX_CONCURRENT_POSITIONS:
@@ -1505,15 +1584,15 @@ def execute_live_long(symbol, net_flow, current_price, is_strong,
 
     # ── Cascade SL 保護（最後防線）──
     now = time.time()
-    recent_sl_times[:] = [t for t in recent_sl_times 
-                        if now - t < CASCADE_SL_WINDOW]
+    recent_sl_times[:] = [t for t in recent_sl_times
+                          if now - t < CASCADE_SL_WINDOW]
     if len(recent_sl_times) >= CASCADE_SL_TRIGGER:
         logger.debug(f"⛔ {symbol} Cascade SL 保護中，拒絕入場")
         return
 
     cancel_all_v5(symbol)
-    actual_bal = get_live_usdt_balance()   # [FIX-SIM] Sim → sim_balance
-    eff_bal    = min(WORKING_CAPITAL, actual_bal)
+    actual_bal = get_live_usdt_balance()  # [FIX-SIM] Sim → sim_balance
+    eff_bal = min(WORKING_CAPITAL, actual_bal)
 
     trade_val = min(
         (eff_bal * RISK_PER_TRADE * position_multiplier) / ((SL_ATR_MULT * atr) / current_price),
@@ -1554,16 +1633,17 @@ def execute_live_long(symbol, net_flow, current_price, is_strong,
             try:
                 od = exchange.fetch_order(order['id'], symbol,
                                           params={"acknowledged": True})
-                actual_price  = float(od.get('average') or od.get('price') or ioc_p)
+                actual_price = float(od.get('average') or od.get('price') or ioc_p)
                 actual_amount = float(od.get('filled', 0))
             except Exception as e:
                 logger.warning(f"⚠️ {symbol} 訂單確認失敗，備用同步: {e}")
                 time.sleep(0.5)
-                for p in exchange.fetch_positions():
+                # [FIX] 加入 category:linear，否則 Bybit V5 可能返回空結果
+                for p in exchange.fetch_positions(params={'category': 'linear'}):
                     if (p['symbol'] == symbol and
-                        float(p.get('contracts', 0) or p.get('size', 0)) > 0):
+                            float(p.get('contracts', 0) or p.get('size', 0)) > 0):
                         actual_amount = float(p.get('contracts', 0) or p.get('size', 0))
-                        actual_price  = float(p.get('entryPrice') or ioc_p)
+                        actual_price = float(p.get('entryPrice') or ioc_p)
                         break
             if actual_amount == 0:
                 print(f"⏩ {symbol} IOC 未成交，撤單退出。")
@@ -1578,15 +1658,17 @@ def execute_live_long(symbol, net_flow, current_price, is_strong,
         symbol, actual_price + (TP_ATR_MULT * atr)))
     sl_p = float(exchange.price_to_precision(
         symbol, actual_price - (SL_ATR_MULT * atr)))
-    profit_ratio = (tp_p - actual_price) / actual_price
-    if profit_ratio < 0.003:
-        print(f"🟡 放棄做多 [{symbol}]: 利潤空間太細！({profit_ratio:.1%})"
+
+    if (tp_p - actual_price) / actual_price < 0.003:
+        print(f"🟡 放棄做多 [{symbol}]: 利潤空間太細！"
               + (" [SIM 無需平倉]" if SIMULATION_MODE else ""))
         if SIMULATION_MODE:
             global sim_balance
+            # [FIX] 退回本金（入場費已在 sim_open_long 扣除，此處只退回本金）
+            # 舊版錯誤：actual_amount * actual_price * (1 - 0.00055) 多扣一次費
             refund = actual_amount * actual_price
             sim_balance += refund
-            logger.info(f"🔵 [SIM] {symbol} 退還資金 {refund:.4f}（利潤空間太細）")
+            logger.info(f"🔵 [SIM] {symbol} 退還本金 {refund:.4f}（利潤空間太細）")
         else:
             try:
                 exchange.create_market_sell_order(
@@ -1607,7 +1689,7 @@ def execute_live_long(symbol, net_flow, current_price, is_strong,
             print(f"✅ {symbol} TP/SL 設置 | TP:{tp_p} | SL:{sl_p}")
         except Exception as e:
             logger.warning(f"⚠️ {symbol} TP/SL 設置異常: {e}")
-        _positions_cache['ts'] = 0   # [BUG FIX 4] 清除快取
+        _positions_cache['ts'] = 0  # [BUG FIX 4] 清除快取
     else:
         print(f"🔵 [SIM] {symbol} 虛擬 TP:{tp_p} | SL:{sl_p}")
         sim_positions[symbol] = {
@@ -1632,13 +1714,13 @@ def execute_live_long(symbol, net_flow, current_price, is_strong,
         'atr': round(atr, 4), 'net_flow': round(net_flow, 2),
         'tp_price': tp_p, 'sl_price': sl_p,
         'actual_balance': round(actual_bal, 2), 'effective_balance': eff_bal,
-        'regime_signal': regime_signal_tag,   # ← 新增
-        'mean_adx':      adx_tag,             # ← 新增
-        'market_score':  score_tag            # ← 新增
+        'regime_signal': regime_signal_tag,  # ← 新增
+        'mean_adx': adx_tag,  # ← 新增
+        'market_score': score_tag  # ← 新增
     })
     print(f"📈 {'[SIM] ' if SIMULATION_MODE else ''}[入貨做多] {symbol} "
           f"@ {actual_price:.4f} | 數量:{actual_amount}")
-    
+
     # 發送Telegram通知
     if TELEGRAM_ENABLED:
         try:
@@ -1666,10 +1748,10 @@ def main():
     load_dynamic_blacklist()
     sync_positions_on_startup()
 
-    last_scout_time   = 0
-    target_coins      = []
+    last_scout_time = 0
+    target_coins = []
     _last_brake_state = None
-    _sim_report_ts    = time.time()   # Sim 模式定時報告計時器
+    _sim_report_ts = time.time()  # Sim 模式定時報告計時器
 
     while True:
         try:
@@ -1705,14 +1787,14 @@ def main():
                 if is_long_signal:
                     mean_adx = regime.get('mean_adx', 0)
                     curr_score = regime.get('market_score', 0)
-                    
+
                     # ADX衰減檢測
                     global _last_scout_adx, _last_scout_score
                     adx_decay = _last_scout_adx - mean_adx if _last_scout_adx > 0 else 0
-                    
+
                     # Score衰減檢測
                     score_decay = _last_scout_score - curr_score if _last_scout_score > 0 else 0
-                    
+
                     # 分級調整邏輯
                     if mean_adx < 20:
                         print(f"⚠️ ADX={mean_adx:.1f} < 20，弱趨勢不交易")
@@ -1729,32 +1811,32 @@ def main():
                     elif mean_adx < 25:
                         # 中等趨勢：降低倉位至70%
                         position_multiplier = 0.7
-                        print(f"🟡 趨勢多頭+2（ADX={mean_adx:.1f}）中等趨勢，倉位調整至{position_multiplier*100:.0f}%"
+                        print(f"🟡 趨勢多頭+2（ADX={mean_adx:.1f}）中等趨勢，倉位調整至{position_multiplier * 100:.0f}%"
                               f"{'[SIM]' if SIMULATION_MODE else ''}掃描...")
                     else:
                         # 強趨勢：正常倉位
                         position_multiplier = 1.0
                         print(f"🟢 趨勢多頭+2（ADX={mean_adx:.1f}）強趨勢，正常倉位"
                               f"{'[SIM]' if SIMULATION_MODE else ''}掃描...")
-                    
-                    _last_scout_adx = mean_adx    # 更新ADX記憶
-                    _last_scout_score = curr_score # 更新Score記憶
-                    
+
+                    _last_scout_adx = mean_adx  # 更新ADX記憶
+                    _last_scout_score = curr_score  # 更新Score記憶
+
                     # 只有在非弱趨勢情況下才進行後續檢查
                     if mean_adx >= 20:
                         # 倉位上限檢查
                         if len(positions) >= MAX_CONCURRENT_POSITIONS:
                             print(f"⛔ 倉位已達上限 {MAX_CONCURRENT_POSITIONS}，跳過本輪掃描")
                             continue
-                        
+
                         # Cascade Pause 檢查
                         now = time.time()
-                        recent_sl_times[:] = [t for t in recent_sl_times 
-                                            if now - t < CASCADE_SL_WINDOW]
+                        recent_sl_times[:] = [t for t in recent_sl_times
+                                              if now - t < CASCADE_SL_WINDOW]
                         if len(recent_sl_times) >= CASCADE_SL_TRIGGER:
                             print(f"⛔ SL 連環觸發保護：{len(recent_sl_times)} 筆 SL 在 {CASCADE_SL_WINDOW}s 內，暫停入場")
                             continue
-                        
+
                         for s in target_coins:
                             try:
                                 flow, last_p, is_strong = apply_lee_ready_long_logic(s)
