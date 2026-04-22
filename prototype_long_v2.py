@@ -1013,11 +1013,11 @@ def get_btc_regime_v3_fast():
         eth_p = regime_data.get('ETH/USDT:USDT', {}).get('closes', [0])[-1]
         sol_p = regime_data.get('SOL/USDT:USDT', {}).get('closes', [0])[-1]
         print(f"   BTC/ETH/SOL 現價      : {btc_p:.0f} / {eth_p:.0f} / {sol_p:.1f}")
-        print(f"   複合分數              : {score:.3f}  (MR閾值:<{mr_thr:.2f} | TR閾值:>{tr_thr:.2f})")
-        print(f"   Z-Score (當前:{mean_z:+.3f}) : {abs(mean_z):.3f}  (多頭閾值:<{zl_thr:.3f} | 空頭閾值:>{zs_thr:.3f})")
-        print(f"   ADX(20/25)           : {mean_adx:.1f} (≥20=趨勢 | ≥25=強趨勢)")
-        print(f"   BBW                  : {mean_bbw:.4f} (≥{bb_thr:.4f}=趨勢確認)")
-        print(f"   ATR%                 : {mean_atr:.4f} (高波動閾值:{atr_hi:.4f})")
+        print(f"   複合分數              : {score:.3f}   (MR:<{mr_thr:.2f} | TR:>{tr_thr:.2f})")
+        print(f"   Z-Score(當前:{mean_z:+.3f}) : {abs(mean_z):.3f}   (多頭:<{zl_thr:.3f} | 空頭:>{zs_thr:.3f})")
+        print(f"   ADX(20/25)           : {mean_adx:.1f}     (≥20=趨勢 | ≥25=強趨勢)")
+        print(f"   BBW                  : {mean_bbw:.4f}     (≥{bb_thr:.4f}=趨勢確認)")
+        print(f"   ATR%                 : {mean_atr:.4f}     (高波動閾值:{atr_hi:.4f})")
         print(f"   EMA方向               : {'↑' if ema_dir==1 else '↓' if ema_dir==-1 else '→'}")
         print(f"   高波動                : {'是' if is_highvol else '否'} | "
               f"熊市閘門: {'開啟' if is_bear else '關閉'}")
