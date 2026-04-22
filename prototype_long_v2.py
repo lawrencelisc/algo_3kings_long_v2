@@ -622,7 +622,7 @@ def get_btc_regime_v3_fast():
 
         # ── [BUG FIX 1] 固定閾值，與 score ∈ [0,1] 同量綱 ──
         MR_SCORE_THR   = 0.55   # score > 0.55 → MR 市況
-        TR_SCORE_THR   = 0.35   # score < 0.35 → 趨勢市況
+        TR_SCORE_THR   = 0.40   # score ≤ 0.40 → 趨勢市況
 
         # ── Z-Score 百分位（保留動態，量綱本身就是 z-score）──
         Z_LONG_PCT  = 20
@@ -1013,7 +1013,7 @@ def get_btc_regime_v3_fast():
         eth_p = regime_data.get('ETH/USDT:USDT', {}).get('closes', [0])[-1]
         sol_p = regime_data.get('SOL/USDT:USDT', {}).get('closes', [0])[-1]
         print(f"   BTC/ETH/SOL 現價      : {btc_p:.0f} / {eth_p:.0f} / {sol_p:.1f}")
-        print(f"   複合分數              : {score:.3f}   (MR:<{mr_thr:.2f} | TR:>{tr_thr:.2f})")
+        print(f"   複合分數               : {score:.3f}   (TR:≤{tr_thr:.2f}) | MR:≥{mr_thr:.2f}")
         print(f"   Z-Score(當前:{mean_z:+.3f}) : {abs(mean_z):.3f}   (多頭:<{zl_thr:.3f} | 空頭:>{zs_thr:.3f})")
         print(f"   ADX(20/25)           : {mean_adx:.1f}     (≥20=趨勢 | ≥25=強趨勢)")
         print(f"   BBW                  : {mean_bbw:.4f}     (≥{bb_thr:.4f}=趨勢確認)")
