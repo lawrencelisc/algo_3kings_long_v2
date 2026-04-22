@@ -1022,7 +1022,7 @@ def get_btc_regime_v3_fast():
         values = [
             f"{btc_p:.0f} / {eth_p:.0f} / {sol_p:.1f}",
             f"{score:.3f} (MR: >={mr_thr:.2f} | TR: <={tr_thr:.2f})",
-            f"{mean_z:+.3f} abs({abs(mean_z):.3f}) (long: <{zl_thr:.3f} | short: >{zs_thr:.3f})",
+            f"{mean_z:+.3f} (long: <{zl_thr:.3f} | short: >{zs_thr:.3f})",
             f"{mean_adx:.1f} (>=20 trend | >=25 strong)",
             f"{mean_bbw:.4f} (>={bb_thr:.4f} trend)",
             f"{mean_atr:.4f} (highvol_threshold: {atr_hi:.4f})",
