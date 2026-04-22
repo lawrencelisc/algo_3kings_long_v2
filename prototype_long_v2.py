@@ -566,40 +566,30 @@ def handle_trade_result(symbol, pnl):
     save_dynamic_blacklist()
 
 
-# ==========================================
-# ╔══════════════════════════════════════╗
-# ║  🔧 BUG FIX 1：score vs mr_thr      ║
-# ║     量綱錯誤修復                      ║
-# ║  🔧 BUG FIX 2：MACRO_BEAR_CONSEC    ║
-# ║     > 資料長度修復                    ║
-# ║  🔧 BUG FIX 3：rolling_7d_return    ║
-# ║     np.roll 計算錯誤修復              ║
-# ╚══════════════════════════════════════╝
-# ==========================================
 def get_btc_regime_v3_fast():
     """
     雙向市場狀態檢測器 V6.7（三項 Bug 修復版）
 
-    ┌─────────────────────────────────────────────────────────┐
-    │ BUG FIX 1：score 量綱修復                               │
-    │   舊版：mr_thr = percentile(ADX_values, 70) ≈ 30~50    │
-    │         score ∈ [0, 1]  → score >= mr_thr 永遠 False   │
-    │   新版：MR_SCORE_THR = 0.55（固定，與 score 同量綱）    │
-    │         TR_SCORE_THR = 0.35                             │
-    │         all_scores 改為追蹤複合分數，供 percentile 用   │
-    │                                                         │
-    │ BUG FIX 2：MACRO_BEAR_CONSEC 修復                      │
-    │   舊版：RET_7D_BARS = 2016，CONSEC = 144               │
-    │         但 limit=300 → consec 永遠累不到 144            │
-    │   新版：RET_7D_BARS = 288（1天，在300根內有效）         │
-    │         MACRO_BEAR_CONSEC = 36（3小時，可在300根內觸發）│
-    │                                                         │
-    │ BUG FIX 3：rolling_7d_return np.roll 修復              │
-    │   舊版：np.roll(closes, win) 前 win 個值是陣列末尾，   │
-    │         計算出來的收益率在 index < win 全部是垃圾值     │
-    │   新版：直接切片 closes[:-win] / closes[win:]           │
-    │         只計算 index >= win 的部分                      │
-    └─────────────────────────────────────────────────────────┘
+
+     BUG FIX 1：score 量綱修復
+       舊版：mr_thr = percentile(ADX_values, 70) ≈ 30~50
+             score ∈ [0, 1]  → score >= mr_thr 永遠 False
+       新版：MR_SCORE_THR = 0.55（固定，與 score 同量綱）
+             TR_SCORE_THR = 0.35
+             all_scores 改為追蹤複合分數，供 percentile 用
+
+     BUG FIX 2：MACRO_BEAR_CONSEC 修復
+       舊版：RET_7D_BARS = 2016，CONSEC = 144
+             但 limit=300 → consec 永遠累不到 144
+       新版：RET_7D_BARS = 288（1天，在300根內有效）
+             MACRO_BEAR_CONSEC = 36（3小時，可在300根內觸發）
+
+     BUG FIX 3：rolling_7d_return np.roll 修復
+       舊版：np.roll(closes, win) 前 win 個值是陣列末尾，
+             計算出來的收益率在 index < win 全部是垃圾值
+       新版：直接切片 closes[:-win] / closes[win:]
+             只計算 index >= win 的部分
+
 
     信號類型：
       +1  MR 多頭（均值回歸看漲）
@@ -643,8 +633,8 @@ def get_btc_regime_v3_fast():
         #   MACRO_BEAR_CONSEC = 36  →  3小時 (36根 × 5min = 180min)
         #   MACRO_BULL_RTN_THR 不變
         RET_7D_BARS        = 288    # [BUG FIX 2] 舊值 2016 → 288
-        MACRO_BEAR_RTN_THR = -0.04
-        MACRO_BULL_RTN_THR = +0.03
+        MACRO_BEAR_RTN_THR = -0.03
+        MACRO_BULL_RTN_THR = +0.02
         MACRO_BEAR_CONSEC  = 36     # [BUG FIX 2] 舊值 144 → 36
 
         # ── 權重（四個指標等權）──
@@ -1035,8 +1025,8 @@ def get_btc_regime_v3_fast():
             f"{mean_atr:.4f} (highvol_threshold: {atr_hi:.4f})",
             f"{'↑' if ema_dir==1 else '↓' if ema_dir==-1 else '→'}",
             f"highvol: {'Y' if is_highvol else 'N'} | bear: {'ON' if is_bear else 'OFF'}",
-            f"{bear_votes}/{n_assets} (Pass 如果有一半資產7天跌>4%)",
-            f"{bull_votes}/{n_assets} (Pass 如果有一半資產7天升>3%)",
+            f"{bear_votes}/{n_assets} (Pass 如果有一半資產24H跌>3%)",
+            f"{bull_votes}/{n_assets} (Pass 如果有一半資產24H升>2%)",
             f"{signal_names.get(regime_signal,'No Signal')}",
             status_text
         ]
