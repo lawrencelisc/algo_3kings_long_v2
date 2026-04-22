@@ -647,7 +647,10 @@ def get_btc_regime_v3_fast():
         # ── 權重（四個指標等權）──
         W1, W2, W3, W4 = 0.25, 0.25, 0.25, 0.25
 
-        REGIME_ASSETS = ['BTC/USDT:USDT', 'ETH/USDT:USDT', 'SOL/USDT:USDT']
+        REGIME_ASSETS = [
+            'BTC/USDT:USDT', 'ETH/USDT:USDT', 'SOL/USDT:USDT',
+            'BNB/USDT:USDT', 'XRP/USDT:USDT', 'AVAX/USDT:USDT'
+        ]
 
         # ────────────────────────────────────────────────
         # 內部指標函數
@@ -1028,8 +1031,8 @@ def get_btc_regime_v3_fast():
             f"{mean_atr:.4f} (highvol_threshold: {atr_hi:.4f})",
             f"{'↑' if ema_dir==1 else '↓' if ema_dir==-1 else '→'}",
             f"highvol: {'Y' if is_highvol else 'N'} | bear: {'ON' if is_bear else 'OFF'}",
-            f"{bear_votes}/{n_assets}",
-            f"{bull_votes}/{n_assets}",
+            f"{bear_votes}/{n_assets} Pass 如果有一半資產7天跌>4%",
+            f"{bull_votes}/{n_assets} Pass 如果有一半資產7天升>3%",
             f"{signal_names.get(regime_signal,'No Signal')}",
             status_text
         ]
