@@ -1021,7 +1021,8 @@ def get_btc_regime_v3_fast():
         print(f"   EMA方向               : {'↑' if ema_dir==1 else '↓' if ema_dir==-1 else '→'}")
         print(f"   高波動                : {'是' if is_highvol else '否'} | "
               f"熊市閘門: {'開啟' if is_bear else '關閉'}")
-        print(f"   bear_votes           : {bear_votes}/{n_assets} | bull_votes:{bull_votes}/{n_assets}")
+        print(f"   bear_votes           : {bear_votes}/{n_assets} (資產7天跌>4%)")
+        print(f"   bull_votes           : {bull_votes}/{n_assets} (資產7天升>3%)")
         print(f"📡 信號                  : {signal_names.get(regime_signal,'無信號')}")
         print(f"🚦 決策                  : {status_text}")
         print("-" * 60)
@@ -1646,9 +1647,6 @@ def main():
     print(f"📋 SL={SL_ATR_MULT}×ATR | TP={TP_ATR_MULT}×ATR | "
           f"Regime緩存={REGIME_CACHE_TTL}s | ATR緩存={ATR_CACHE_TTL}s | "
           f"Positions緩存={POSITIONS_CACHE_TTL}s")
-    print(f"🔧 BUG FIX 1: score 量綱修復 (MR_THR=0.55 / TR_THR=0.35)")
-    print(f"🔧 BUG FIX 2: Macro Bear CONSEC=36根 / RET_WIN=288根")
-    print(f"🔧 BUG FIX 3: rolling_return 切片法取代 np.roll")
 
     load_dynamic_blacklist()
     sync_positions_on_startup()
