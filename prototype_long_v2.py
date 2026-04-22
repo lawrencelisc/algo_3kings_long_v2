@@ -164,6 +164,9 @@ SL_ATR_MULT = 3.0
 MAX_CONSECUTIVE_LOSSES = 3
 DYNAMIC_BAN_DURATION = 86400
 
+# 交易手續費（Bybit taker fee）- 可從環境變數設定
+FEE_RATE = float(os.getenv('FEE_RATE', '0.00055'))  # 0.055%
+
 MAX_CONCURRENT_POSITIONS = 5
 CASCADE_SL_WINDOW = 180  # 秒
 CASCADE_SL_TRIGGER = 2  # 筆
@@ -255,7 +258,7 @@ def sim_open_long(symbol, amount, price):
     - 返回 (actual_amount, actual_price) 或 (0, 0) 若餘額不足
     """
     global sim_balance, sim_trade_count
-    fee = amount * price * 0.00055  # Bybit taker fee
+    fee = amount * price * FEE_RATE  # Bybit taker fee
     cost = amount * price + fee
     if sim_balance < cost:
         logger.warning(f"🔵 [SIM] {symbol} 餘額不足 (需 {cost:.2f}, 有 {sim_balance:.2f})")
@@ -279,7 +282,7 @@ def sim_close_long(symbol, amount, price):
         return 0.0
     pos = sim_positions[symbol]
     entry_price = pos['entry_price']
-    fee = amount * price * 0.00055
+    fee = amount * price * FEE_RATE
     gross_pnl = (price - entry_price) * amount
     net_pnl = gross_pnl - fee
     proceeds = amount * price - fee
@@ -644,14 +647,18 @@ def get_btc_regime_v3_fast():
         #   MACRO_BEAR_CONSEC = 36  →  3小時 (36根 × 5min = 180min)
         #   MACRO_BULL_RTN_THR 不變
         RET_7D_BARS = 288  # [BUG FIX 2] 舊值 2016 → 288
-        MACRO_BEAR_RTN_THR = -0.04
-        MACRO_BULL_RTN_THR = +0.03
+        MACRO_BEAR_RTN_THR = -0.03
+        MACRO_BULL_RTN_THR = +0.02
         MACRO_BEAR_CONSEC = 36  # [BUG FIX 2] 舊值 144 → 36
 
         # ── 權重（四個指標等權）──
         W1, W2, W3, W4 = 0.25, 0.25, 0.25, 0.25
 
-        REGIME_ASSETS = ['BTC/USDT:USDT', 'ETH/USDT:USDT', 'SOL/USDT:USDT']
+        REGIME_ASSETS = [
+            'BTC/USDT:USDT', 'ETH/USDT:USDT', 'SOL/USDT:USDT',
+            'BNB/USDT:USDT', 'XRP/USDT:USDT', 'AVAX/USDT:USDT',
+            'ADA/USDT:USDT', 'DOGE/USDT:USDT'
+        ]
 
         # ────────────────────────────────────────────────
         # 內部指標函數
@@ -1054,8 +1061,8 @@ def get_btc_regime_v3_fast():
             f"{mean_atr:.4f} (highvol_threshold: {atr_hi:.4f})",
             f"{'↑' if ema_dir == 1 else '↓' if ema_dir == -1 else '→'}",
             f"highvol: {'Y' if is_highvol else 'N'} | bear: {'ON' if is_bear else 'OFF'}",
-            f"{bear_votes}/{n_assets}",
-            f"{bull_votes}/{n_assets}",
+            f"{bear_votes}/{n_assets} (Pass 如果有一半資產24H跌>3%)",
+            f"{bull_votes}/{n_assets} (Pass 如果有一半資產24H升>2%)",
             f"{signal_names.get(regime_signal, 'No Signal')}",
             status_text
         ]
@@ -1413,6 +1420,11 @@ def manage_long_positions(regime=None):
                     except Exception as e:
                         logger.warning(f"⚠️ {s} Trail SL 更新失敗: {e}")
 
+                # ── 同步 Trail SL 到 sim_positions（Sim only）──
+                if sl_updated and SIMULATION_MODE:
+                    if s in sim_positions:
+                        sim_positions[s]['sl_price'] = pos['sl_price']
+
                 # ── 離場判斷 ──
                 exit_reason = None
                 time_held = time.time() - pos.get('entry_time', time.time())
@@ -1474,8 +1486,8 @@ def manage_long_positions(regime=None):
                             exchange.create_market_sell_order(
                                 s, pos['amount'], {'reduceOnly': True})
                         # [FIX] 扣除入場及出場 taker fee（各 0.055%）
-                        entry_fee = pos['entry_price'] * pos['amount'] * 0.00055
-                        exit_fee = ioc_price * pos['amount'] * 0.00055
+                        entry_fee = pos['entry_price'] * pos['amount'] * FEE_RATE
+                        exit_fee = ioc_price * pos['amount'] * FEE_RATE
                         ioc_pnl = round(
                             (ioc_price - pos['entry_price']) * pos['amount'] - entry_fee - exit_fee, 4
                         )
