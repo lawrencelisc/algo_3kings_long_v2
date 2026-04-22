@@ -160,6 +160,9 @@ SL_ATR_MULT    = 3.0
 MAX_CONSECUTIVE_LOSSES = 3
 DYNAMIC_BAN_DURATION   = 86400
 
+# 交易手續費（Bybit taker fee）— 統一管理
+FEE_RATE       = 0.00055   # 0.055%
+
 MAX_CONCURRENT_POSITIONS = 3
 CASCADE_SL_WINDOW = 180    # 秒
 CASCADE_SL_TRIGGER = 2     # 筆
@@ -275,7 +278,7 @@ def sim_close_long(symbol, amount, price):
         return 0.0
     pos         = sim_positions[symbol]
     entry_price = pos['entry_price']
-    fee         = amount * price * 0.00055
+    fee         = amount * price * FEE_RATE
     gross_pnl   = (price - entry_price) * amount
     net_pnl     = gross_pnl - fee
     proceeds    = amount * price - fee
@@ -647,10 +650,7 @@ def get_btc_regime_v3_fast():
         # ── 權重（四個指標等權）──
         W1, W2, W3, W4 = 0.25, 0.25, 0.25, 0.25
 
-        REGIME_ASSETS = [
-            'BTC/USDT:USDT', 'ETH/USDT:USDT', 'SOL/USDT:USDT',
-            'BNB/USDT:USDT', 'XRP/USDT:USDT', 'AVAX/USDT:USDT'
-        ]
+        REGIME_ASSETS = ['BTC/USDT:USDT', 'ETH/USDT:USDT', 'SOL/USDT:USDT']
 
         # ────────────────────────────────────────────────
         # 內部指標函數
@@ -1031,8 +1031,8 @@ def get_btc_regime_v3_fast():
             f"{mean_atr:.4f} (highvol_threshold: {atr_hi:.4f})",
             f"{'↑' if ema_dir==1 else '↓' if ema_dir==-1 else '→'}",
             f"highvol: {'Y' if is_highvol else 'N'} | bear: {'ON' if is_bear else 'OFF'}",
-            f"{bear_votes}/{n_assets} Pass 如果有一半資產7天跌>4%",
-            f"{bull_votes}/{n_assets} Pass 如果有一半資產7天升>3%",
+            f"{bear_votes}/{n_assets} (資產7天跌>4%)",
+            f"{bull_votes}/{n_assets} (資產7天升>3%)",
             f"{signal_names.get(regime_signal,'No Signal')}",
             status_text
         ]
@@ -1439,8 +1439,11 @@ def manage_long_positions(regime=None):
                         except:
                             exchange.create_market_sell_order(
                                 s, pos['amount'], {'reduceOnly': True})
-                        ioc_pnl = round((ioc_price - pos['entry_price']) * pos['amount'], 4)
-                        _positions_cache['ts'] = 0   # [BUG FIX 4] 清除快取
+                        fee = ioc_price * pos['amount'] * FEE_RATE
+                        gross_pnl = (ioc_price - pos['entry_price']) * pos['amount']
+                        ioc_pnl = round(gross_pnl - fee, 4)
+                        
+                        _positions_cache['ts'] = 0
 
                     log_to_csv({
                         'symbol': s, 'action': 'LONG_EXIT', 'price': curr_p,
@@ -1581,13 +1584,13 @@ def execute_live_long(symbol, net_flow, current_price, is_strong,
         symbol, actual_price + (TP_ATR_MULT * atr)))
     sl_p = float(exchange.price_to_precision(
         symbol, actual_price - (SL_ATR_MULT * atr)))
-
-    if (tp_p - actual_price) / actual_price < 0.003:
-        print(f"🟡 放棄做多 [{symbol}]: 利潤空間太細！"
+    profit_ratio = (tp_p - actual_price) / actual_price
+    if profit_ratio < 0.003:
+        print(f"🟡 放棄做多 [{symbol}]: 利潤空間太細！({profit_ratio:.1%})"
               + (" [SIM 無需平倉]" if SIMULATION_MODE else ""))
         if SIMULATION_MODE:
             global sim_balance
-            refund = actual_amount * actual_price * (1 - 0.00055)
+            refund = actual_amount * actual_price
             sim_balance += refund
             logger.info(f"🔵 [SIM] {symbol} 退還資金 {refund:.4f}（利潤空間太細）")
         else:
