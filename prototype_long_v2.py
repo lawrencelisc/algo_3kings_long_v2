@@ -8,6 +8,14 @@ import sys
 import json
 from datetime import datetime
 
+# 嘗試導入Telegram Bot
+try:
+    from telegram_bot import telegram_notifier
+    TELEGRAM_ENABLED = telegram_notifier.enabled
+except ImportError:
+    TELEGRAM_ENABLED = False
+    logging.getLogger(__name__).warning("⚠️ Telegram Bot模塊未找到，通知功能將禁用")
+
 # ==========================================
 # ⚙️ [系統/參數] 模組初始化與 API 配置 V6.7 BugFixed
 # ==========================================
@@ -124,6 +132,10 @@ recent_sl_times    = []  # Cascade Pause 追蹤器
 # ADX 和 Score 趨勢追蹤
 _last_scout_adx    = 0.0   # 上次 scout 的 ADX
 _last_scout_score  = 0.0   # 上次 scout 的 Score
+
+# 市場狀態記憶（用於Telegram通知）
+_last_market_signal = 0     # 上次市場信號
+_last_market_notification_time = 0  # 上次通知時間
 
 # ==========================================
 # ⚙️ [系統/參數] 策略與風控全局變數
@@ -985,7 +997,8 @@ def get_btc_regime_v3_fast():
         })
 
         print("-" * 60)
-        print(f"🌐 市場狀態 V6.7 BugFixed（{len(regime_data)} 個資產）"
+        current_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+        print(f"🌐 市場狀態 V6.7 BugFixed（{len(regime_data)} 個資產）[{current_time}]"
               + (" [SIM]" if SIMULATION_MODE else " [LIVE]"))
         
         # 顯示三個資產的現價
@@ -1003,6 +1016,38 @@ def get_btc_regime_v3_fast():
         print(f"📡 信號                  : {signal_names.get(regime_signal,'無信號')}")
         print(f"🚦 決策                  : {status_text}")
         print("-" * 60)
+        
+        # Telegram市場狀態通知（每小時或信號變化時）
+        global _last_market_signal, _last_market_notification_time
+        current_time = time.time()
+        
+        # 檢查是否需要發送通知：
+        # 1. 信號發生變化
+        # 2. 距離上次通知超過1小時
+        # 3. Telegram已啟用
+        if (TELEGRAM_ENABLED and 
+            (_last_market_signal != regime_signal or 
+             current_time - _last_market_notification_time > 3600)):
+            
+            try:
+                # 準備市場數據
+                market_data = {
+                    'signal_names': signal_names.get(regime_signal, '無信號'),
+                    'mean_adx': mean_adx,
+                    'market_score': score,
+                    'is_highvol': is_highvol,
+                    'is_bear': is_bear,
+                    'btc_price': btc_p
+                }
+                
+                telegram_notifier.send_market_status(market_data)
+                
+                # 更新記憶
+                _last_market_signal = regime_signal
+                _last_market_notification_time = current_time
+                
+            except Exception as e:
+                logger.warning(f"⚠️ Telegram市場狀態通知失敗: {e}")
 
         result = {
             'signal':       signal,
@@ -1370,6 +1415,21 @@ def manage_long_positions(regime=None):
                         'amount': pos['amount'], 'reason': exit_reason,
                         'realized_pnl': ioc_pnl
                     })
+                    
+                    # 發送Telegram通知
+                    if TELEGRAM_ENABLED:
+                        try:
+                            telegram_notifier.send_trade_alert(
+                                symbol=s,
+                                action='LONG_EXIT',
+                                price=curr_p,
+                                amount=pos['amount'],
+                                reason=exit_reason,
+                                pnl=ioc_pnl
+                            )
+                        except Exception as e:
+                            logger.warning(f"⚠️ Telegram通知發送失敗: {e}")
+                    
                     cancel_all_v5(s)
                     handle_trade_result(s, ioc_pnl)
                     del positions[s]
@@ -1549,6 +1609,19 @@ def execute_live_long(symbol, net_flow, current_price, is_strong,
     })
     print(f"📈 {'[SIM] ' if SIMULATION_MODE else ''}[入貨做多] {symbol} "
           f"@ {actual_price:.4f} | 數量:{actual_amount}")
+    
+    # 發送Telegram通知
+    if TELEGRAM_ENABLED:
+        try:
+            telegram_notifier.send_trade_alert(
+                symbol=symbol,
+                action='LONG_ENTRY',
+                price=actual_price,
+                amount=actual_amount,
+                reason=f"趨勢多頭 | ADX:{adx_tag} | Score:{score_tag}"
+            )
+        except Exception as e:
+            logger.warning(f"⚠️ Telegram通知發送失敗: {e}")
 
 
 # ==========================================
